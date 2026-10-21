@@ -407,56 +407,98 @@ button:disabled {
 }
 .piano {
   position: relative;
-  height: 96px;
+  height: 110px;
   display: flex;
 }
 .piano .white {
   flex: none;
-  width: 34px;
+  width: 36px;
   height: 100%;
-  background: #e8e8ec;
-  border-right: 1px solid #b8b8c0;
+  background: #ececf0;
+  border-right: 1px solid #b4b4bc;
   border-radius: 0 0 4px 4px;
   position: relative;
   display: flex;
   align-items: flex-end;
   justify-content: center;
-  padding-bottom: 5px;
-  font-size: 9px;
-  color: #666;
-  font-weight: 600;
+  padding-bottom: 6px;
   user-select: none;
+}
+.piano .white .key-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: #55555e;
+  font-family: var(--mono);
 }
 .piano .black {
   position: absolute;
   top: 0;
-  width: 22px;
-  height: 58%;
-  background: #141418;
+  width: 24px;
+  height: 60%;
+  background: #1a1a1f;
   border: 1px solid #000;
   border-radius: 0 0 3px 3px;
   z-index: 2;
   user-select: none;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: 4px;
 }
-.piano .white.in-scale {
-  background: #d9c88a;
+.piano .black .key-label {
+  font-size: 8px;
+  color: #8a8a94;
+  font-family: var(--mono);
+  line-height: 1;
+  text-align: center;
 }
-.piano .black.in-scale {
-  background: #5b4e1f;
+.piano .black .key-label small {
+  font-size: 7px;
+}
+/* scale membership = a dot above the label, not a colour wash */
+.piano .in-scale::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  opacity: 0.85;
+}
+.piano .white.in-scale::before {
+  bottom: 24px;
+}
+.piano .black.in-scale::before {
+  bottom: 18px;
 }
 .piano .white.root {
   background: var(--accent);
+}
+.piano .white.root .key-label {
   color: #1a1400;
 }
 .piano .black.root {
-  background: var(--accent);
+  background: #b8901f;
+}
+.piano .black.root .key-label {
+  color: #1a1400;
+}
+.piano .root::before {
+  display: none;
 }
 .piano .white.sounding {
   background: var(--good);
+}
+.piano .white.sounding .key-label {
   color: #042;
 }
 .piano .black.sounding {
-  background: var(--good);
+  background: #2f9a5a;
+}
+.piano .sounding::before {
+  display: none;
 }
 .piano .white.sung {
   box-shadow: inset 0 -5px 0 0 var(--warn);

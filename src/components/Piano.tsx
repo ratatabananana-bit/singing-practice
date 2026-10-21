@@ -1,10 +1,10 @@
 import { useEffect, useRef } from 'react';
-import { isSharp, noteLabel, pitchClass } from '../music/notes';
+import { isSharp, noteLabel, noteName, octaveOf } from '../music/notes';
 
 export const PIANO_LO = 24; // C1
 export const PIANO_HI = 96; // C7
-const WHITE_W = 34;
-const BLACK_W = 22;
+const WHITE_W = 36;
+const BLACK_W = 24;
 const TAP_SLOP = 6; // px of movement before a press becomes a drag
 
 export interface PianoProps {
@@ -25,9 +25,11 @@ function whiteIndex(midi: number): number {
 }
 
 /**
- * Scrollable keyboard. Touch scrolls natively; mouse drag scrolls too.
- * A key fires on release only when the pointer did not move (so scrolling never plays notes).
- * The view only auto-scrolls when the target note is out of view (never snaps on a tap).
+ * Scrollable keyboard with natural key colours. Every key is labelled with its note name;
+ * notes in the current scale get a dot, the root is yellow, the sounding note green and
+ * the note being sung is underlined.
+ * Touch scrolls natively; mouse drag scrolls too. A key fires on release only when the
+ * pointer did not move. The view only auto-scrolls when the target note is out of view.
  */
 export function Piano({ root = null, inScale, sounding = null, sung = null, onKey, center }: PianoProps) {
   const wrap = useRef<HTMLDivElement>(null);
@@ -40,7 +42,6 @@ export function Piano({ root = null, inScale, sounding = null, sung = null, onKe
     const el = wrap.current;
     if (!el || target === null || target === undefined) return;
     if (tappedRef.current === target) {
-      // The user tapped this key: it is already on screen, leave the scroll alone.
       tappedRef.current = null;
       return;
     }
@@ -118,13 +119,18 @@ export function Piano({ root = null, inScale, sounding = null, sung = null, onKe
           .filter((k) => !k.black)
           .map((k) => (
             <div key={k.midi} className={cls(k.midi, false)} data-midi={k.midi}>
-              {pitchClass(k.midi) === 0 ? noteLabel(k.midi) : ''}
+              <span className="key-label">{noteLabel(k.midi)}</span>
             </div>
           ))}
         {keys
           .filter((k) => k.black)
           .map((k) => (
-            <div key={k.midi} className={cls(k.midi, true)} style={{ left: k.x }} data-midi={k.midi} />
+            <div key={k.midi} className={cls(k.midi, true)} style={{ left: k.x }} data-midi={k.midi}>
+              <span className="key-label">
+                {noteName(k.midi).replace('#', '♯')}
+                <small>{octaveOf(k.midi)}</small>
+              </span>
+            </div>
           ))}
       </div>
     </div>

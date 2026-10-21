@@ -6,6 +6,8 @@ import { SettingsSheet } from './components/SettingsSheet';
 import { mic } from './audio/mic/MicService';
 import { unlockAudio } from './audio/context';
 import { useMicState } from './state/pitchStore';
+import { useSettings } from './state/settings';
+import { instrument } from './audio/synth/Instrument';
 import './state/pitchHistory';
 
 type Tab = 'play' | 'tune' | 'studio';
@@ -31,6 +33,7 @@ export function App() {
     const onFirst = () => {
       void unlockAudio();
       if (mic.state === 'idle') void mic.start();
+      if (useSettings.getState().sound === 'piano') instrument.preloadAll();
       window.removeEventListener('pointerdown', onFirst);
     };
     window.addEventListener('pointerdown', onFirst);

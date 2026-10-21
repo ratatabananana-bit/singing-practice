@@ -10,16 +10,26 @@ export type ScaleId =
   | 'mixolydian'
   | 'majorArpeggio'
   | 'minorArpeggio'
-  | 'chromatic';
+  | 'chromatic'
+  // vocal patterns (fixed up-and-down shapes, direction does not apply)
+  | 'p151'
+  | 'p1351'
+  | 'p13581'
+  | 'p12321'
+  | 'p181'
+  | 'p15851'
+  | 'pMin1351';
 
 export interface ScaleDef {
   id: ScaleId;
   name: string;
   short: string;
-  /** Semitone offsets from root within one octave (no octave repeat). */
+  /** Semitone offsets from root within one octave (no octave repeat); used for "in scale" tests. */
   intervals: number[];
   /** Semitone offsets used for the exercise (may differ from the full scale). */
   exercise: number[];
+  /** Fixed pattern: play `exercise` exactly as written, ignore direction. */
+  pattern?: boolean;
 }
 
 const S = (id: ScaleId, name: string, short: string, intervals: number[], exercise?: number[]): ScaleDef => ({
@@ -29,11 +39,22 @@ const S = (id: ScaleId, name: string, short: string, intervals: number[], exerci
   intervals,
   exercise: exercise ?? [...intervals, 12],
 });
+const P = (id: ScaleId, name: string, short: string, intervals: number[], exercise: number[]): ScaleDef => ({
+  id,
+  name,
+  short,
+  intervals,
+  exercise,
+  pattern: true,
+});
+
+const MAJOR = [0, 2, 4, 5, 7, 9, 11];
+const MINOR = [0, 2, 3, 5, 7, 8, 10];
 
 export const SCALES: ScaleDef[] = [
   // Default Major exercise is five notes (do-re-mi-fa-sol), not a full octave.
-  S('major', 'Major', 'maj', [0, 2, 4, 5, 7, 9, 11], [0, 2, 4, 5, 7]),
-  S('naturalMinor', 'Natural Minor', 'min', [0, 2, 3, 5, 7, 8, 10], [0, 2, 3, 5, 7]),
+  S('major', 'Major', 'maj', MAJOR, [0, 2, 4, 5, 7]),
+  S('naturalMinor', 'Natural Minor', 'min', MINOR, [0, 2, 3, 5, 7]),
   S('harmonicMinor', 'Harmonic Minor', 'harm', [0, 2, 3, 5, 7, 8, 11]),
   S('melodicMinor', 'Melodic Minor', 'mel', [0, 2, 3, 5, 7, 9, 11]),
   S('majorPentatonic', 'Major Pentatonic', 'maj pent', [0, 2, 4, 7, 9]),
@@ -44,6 +65,14 @@ export const SCALES: ScaleDef[] = [
   S('majorArpeggio', 'Major Arpeggio', 'maj arp', [0, 4, 7]),
   S('minorArpeggio', 'Minor Arpeggio', 'min arp', [0, 3, 7]),
   S('chromatic', 'Chromatic', 'chrom', [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]),
+  // Common vocal warm-up patterns (as recommended online by degree numbers).
+  P('p151', 'Fifth', '1-5-1', MAJOR, [0, 7, 0]),
+  P('p181', 'Octave', '1-8-1', MAJOR, [0, 12, 0]),
+  P('p12321', 'Three-note', '1-2-3-2-1', MAJOR, [0, 2, 4, 2, 0]),
+  P('p1351', 'Triad', '1-3-5-3-1', MAJOR, [0, 4, 7, 4, 0]),
+  P('pMin1351', 'Minor triad', '1-♭3-5-♭3-1', MINOR, [0, 3, 7, 3, 0]),
+  P('p13581', 'Octave arpeggio', '1-3-5-8-5-3-1', MAJOR, [0, 4, 7, 12, 7, 4, 0]),
+  P('p15851', 'Fifth & octave', '1-5-8-5-1', MAJOR, [0, 7, 12, 7, 0]),
 ];
 
 export const SCALE_BY_ID: Record<ScaleId, ScaleDef> = Object.fromEntries(SCALES.map((s) => [s.id, s])) as Record<
@@ -60,12 +89,17 @@ export function degreeLabel(_scale: ScaleDef, interval: number): string {
   return DEGREE_BY_SEMITONE[((interval % 12) + 12) % 12];
 }
 
+/** "1 2 3 4 5" style summary of an exercise. */
+export function degreeString(scale: ScaleDef): string {
+  return scale.exercise.map((i) => degreeLabel(scale, i)).join(' ');
+}
+
 export type Direction = 'up' | 'down' | 'upDown';
 
-/** Build the MIDI sequence for an exercise at `root`. Up-down does not repeat the top note. */
+/** Build the MIDI sequence for an exercise at `root`. Up-down does not repeat the top note. Patterns ignore direction. */
 export function buildSequence(root: number, scale: ScaleDef, direction: Direction): number[] {
   const up = scale.exercise.map((i) => root + i);
-  if (direction === 'up') return up;
+  if (scale.pattern || direction === 'up') return up;
   const down = [...up].reverse();
   if (direction === 'down') return down;
   return [...up, ...down.slice(1)];
@@ -73,7 +107,7 @@ export function buildSequence(root: number, scale: ScaleDef, direction: Directio
 
 /** Index in the sequence at which the direction turns (for the return-arrow chip), or -1. */
 export function turnIndex(scale: ScaleDef, direction: Direction): number {
-  return direction === 'upDown' ? scale.exercise.length - 1 : -1;
+  return !scale.pattern && direction === 'upDown' ? scale.exercise.length - 1 : -1;
 }
 
 export function isInScale(midi: number, root: number, scale: ScaleDef): boolean {

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSettings } from '../state/settings';
 import { SCALES, SCALE_BY_ID, isInScale, scaleNotesInRange } from '../music/scales';
-import { centsOff, freqToMidi, midiToFreq, noteLabel, noteName, octaveOf } from '../music/notes';
+import { centsOff, freqToMidi, freqToNote, midiToFreq, noteLabel, noteName, octaveOf } from '../music/notes';
 import { detectKey, type KeyGuess } from '../music/keyDetect';
 import { instrument } from '../audio/synth/Instrument';
 import { unlockAudio, getAudioContext } from '../audio/context';
@@ -77,7 +77,7 @@ export function TuneTab() {
         </div>
         {s.tuneMode === 'scale' && (
           <div className="chips scroll grow">
-            {SCALES.filter((sc) => !s.hiddenScales.includes(sc.id)).map((sc) => (
+            {SCALES.filter((sc) => !sc.pattern && !s.hiddenScales.includes(sc.id)).map((sc) => (
               <button key={sc.id} className={`chip sm${sc.id === scale.id ? ' on' : ''}`} onClick={() => s.set({ tuneScale: sc.id })}>
                 {sc.short}
               </button>
@@ -222,7 +222,16 @@ function TunerCard({
   const holdSeconds = useSettings((x) => x.holdSeconds);
   const silenceDb = useSettings((x) => x.silenceDb);
   const st = { holdSeconds, silenceDb };
-  const tuneStatus = !live.voiced ? 'Listening' : Math.abs(live.cents) <= IN_TUNE ? 'In tune' : Math.abs(live.cents) > 100 ? 'Far off' : live.cents < 0 ? 'Flat' : 'Sharp';
+  const semis = Math.round(Math.abs(live.cents) / 100);
+  const tuneStatus = !live.voiced
+    ? 'Listening'
+    : Math.abs(live.cents) <= IN_TUNE
+      ? 'In tune'
+      : Math.abs(live.cents) > 100
+        ? `Far off · ${semis} semitone${semis === 1 ? '' : 's'} ${live.cents < 0 ? 'low' : 'high'}`
+        : live.cents < 0
+          ? 'Flat'
+          : 'Sharp';
   const statusCls = !live.voiced ? 'ghost' : Math.abs(live.cents) <= IN_TUNE ? 'good' : Math.abs(live.cents) > 100 ? 'bad' : 'warn';
   const keyCls = !keyGuess ? 'ghost' : keyGuess.confidence > 0.6 ? 'good' : keyGuess.confidence > 0.35 ? 'warn' : 'ghost';
 
@@ -260,12 +269,18 @@ function TunerCard({
             {live.voiced ? `${live.cents >= 0 ? '+' : '−'}${Math.abs(Math.round(live.cents))}¢` : '—'}
           </div>
           <div className="muted mono" style={{ fontSize: 12 }}>
-            {live.voiced ? `${live.freq.toFixed(1)} Hz` : '— Hz'}
+            {live.voiced ? (
+              <>
+                <span style={{ color: 'var(--text)', fontWeight: 700 }}>{noteLabel(freqToNote(live.freq).midi)}</span> · {live.freq.toFixed(1)} Hz
+              </>
+            ) : (
+              '— Hz'
+            )}
           </div>
         </div>
       </div>
       <div className="row" style={{ marginTop: 10, alignItems: 'stretch' }}>
-        <TuneGraph histT={histT} histC={histC} />
+        <TuneGraph histT={histT} histC={histC} target={target} />
         <LoudnessMeter db={live.db} height={150} />
       </div>
       <div className="row wrap" style={{ marginTop: 8 }}>
@@ -280,8 +295,10 @@ function TunerCard({
 }
 
 /** Scrolling cents-deviation graph (~7 s). Holds the last value when silent. */
-function TuneGraph({ histT, histC }: { histT: React.RefObject<number[]>; histC: React.RefObject<number[]> }) {
+function TuneGraph({ histT, histC, target }: { histT: React.RefObject<number[]>; histC: React.RefObject<number[]>; target: number }) {
   const ref = useRef<HTMLCanvasElement>(null);
+  const targetRef = useRef(target);
+  targetRef.current = target;
   useEffect(() => {
     const cv = ref.current!;
     let raf = 0;
@@ -312,8 +329,10 @@ function TuneGraph({ histT, histC }: { histT: React.RefObject<number[]>; histC: 
         g.moveTo(0, y);
         g.lineTo(w, y);
         g.stroke();
-        g.fillText(`${st > 0 ? '+' : ''}${st}`, 4, y - 3);
+        g.fillText(`${noteLabel(targetRef.current + st)}  ${st > 0 ? '+' : ''}${st}`, 4, y - 3);
       }
+      g.fillStyle = '#8b8b96';
+      g.fillText(noteLabel(targetRef.current), 4, h / 2 - 3);
       g.setLineDash([4, 4]);
       g.strokeStyle = '#8b8b96';
       g.beginPath();

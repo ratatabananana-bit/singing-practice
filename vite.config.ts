@@ -21,6 +21,18 @@ export default defineConfig({
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,woff2}'],
         maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
+        runtimeCaching: [
+          {
+            // Piano samples: keep them offline once fetched.
+            urlPattern: /^https:\/\/tonejs\.github\.io\/audio\/salamander\/.*\.mp3$/,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'piano-samples',
+              expiration: { maxEntries: 40, maxAgeSeconds: 365 * 24 * 3600 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+        ],
       },
     }),
   ],

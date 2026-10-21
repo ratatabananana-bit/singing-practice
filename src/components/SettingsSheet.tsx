@@ -45,7 +45,7 @@ export function SettingsSheet({ onClose }: { onClose: () => void }) {
                 const lastVisible = !hidden && SCALES.length - s.hiddenScales.length <= 1;
                 return (
                   <button key={sc.id} className={`chip sm${hidden ? '' : ' on'}`} disabled={lastVisible} onClick={() => s.toggleScaleHidden(sc.id)}>
-                    {sc.name}
+                    {sc.pattern ? sc.short : sc.name}
                   </button>
                 );
               })}

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSettings, type AutoAdvance } from '../state/settings';
-import { SCALES, SCALE_BY_ID, buildSequence, degreeLabel, isInScale, turnIndex, type Direction } from '../music/scales';
+import { SCALES, SCALE_BY_ID, buildSequence, degreeLabel, degreeString, isInScale, turnIndex, type Direction, type ScaleDef } from '../music/scales';
 import { centsOff, noteLabel, noteName, octaveOf, clampMidi } from '../music/notes';
 import { Sequencer } from '../audio/sequencer';
 import { instrument } from '../audio/synth/Instrument';
@@ -90,7 +90,7 @@ export function PlayTab() {
   };
 
   const soundingMidi = introMidi ?? (step >= 0 ? sequence[step] : null);
-  // Chips show the exercise once as scale degrees; on the way back the highlight walks backwards.
+  // Chips show the exercise once as note names; on the way back the highlight walks backwards.
   const chipNotes = s.playDirection === 'down' ? [...scale.exercise].reverse() : scale.exercise;
   const chipRoot = s.playRoot;
   const chipStep = step < 0 ? -1 : turn >= 0 && step > turn ? 2 * turn - step : step;
@@ -115,7 +115,7 @@ export function PlayTab() {
               <small>{octaveOf(s.playRoot)}</small>
             </div>
             <div className="muted" style={{ marginTop: 4, fontSize: 13 }}>
-              {scale.name}
+              {scale.pattern ? `${scale.name} ${scale.short}` : scale.name}
             </div>
           </div>
           <div className="row" style={{ gap: 8 }}>
@@ -135,11 +135,18 @@ export function PlayTab() {
         </div>
         <div className="chips" style={{ marginTop: 6 }}>
           {chipNotes.map((offset, i) => (
-            <span key={i} className={`chip sm${i === chipStep ? ' sounding' : ''}`} title={noteLabel(chipRoot + offset)}>
-              {degreeLabel(scale, offset)}
+            <span key={i} className={`chip sm${i === chipStep ? ' sounding' : ''}`} title={degreeLabel(scale, offset)}>
+              {noteLabel(chipRoot + offset)}
             </span>
           ))}
           {turn >= 0 && <span className={`chip sm${step > turn ? ' on' : ''}`}>↩</span>}
+        </div>
+        <div className="row between" style={{ marginTop: 8 }}>
+          <span className="dim" style={{ fontSize: 11 }}>
+            {scale.pattern ? scale.short : degreeString(scale)}
+            {turn >= 0 ? ' and back' : ''}
+          </span>
+          <SingTarget target={soundingMidi} />
         </div>
         {introMidi !== null && (
           <div className="muted" style={{ fontSize: 11, marginTop: 6 }}>
@@ -152,30 +159,70 @@ export function PlayTab() {
 
       <section className="card">
         <div className="row between">
-          <span className="label">Scale</span>
-          <div className="seg">
-            {(
-              [
-                ['up', 'Up'],
-                ['down', 'Down'],
-                ['upDown', 'Up-down'],
-              ] as [Direction, string][]
-            ).map(([d, name]) => (
-              <button key={d} className={s.playDirection === d ? 'on' : ''} onClick={() => s.set({ playDirection: d })}>
-                {name}
-              </button>
-            ))}
-          </div>
+          <span className="label">Exercise</span>
+          {!scale.pattern && (
+            <div className="seg">
+              {(
+                [
+                  ['up', 'Up'],
+                  ['down', 'Down'],
+                  ['upDown', 'Up-down'],
+                ] as [Direction, string][]
+              ).map(([d, name]) => (
+                <button key={d} className={s.playDirection === d ? 'on' : ''} onClick={() => s.set({ playDirection: d })}>
+                  {name}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
         <div className="chips" style={{ marginTop: 8 }}>
-          {visibleScales.map((sc) => (
-            <button key={sc.id} className={`chip${sc.id === scale.id ? ' on' : ''}`} onClick={() => s.set({ playScale: sc.id })}>
-              {sc.name}
-            </button>
-          ))}
+          {visibleScales
+            .filter((sc) => !sc.pattern)
+            .map((sc) => (
+              <ExerciseChip key={sc.id} sc={sc} on={sc.id === scale.id} onClick={() => s.set({ playScale: sc.id })} />
+            ))}
         </div>
+        {visibleScales.some((sc) => sc.pattern) && (
+          <>
+            <div className="label" style={{ marginTop: 12 }}>
+              Patterns
+            </div>
+            <div className="chips" style={{ marginTop: 6 }}>
+              {visibleScales
+                .filter((sc) => sc.pattern)
+                .map((sc) => (
+                  <ExerciseChip key={sc.id} sc={sc} on={sc.id === scale.id} onClick={() => s.set({ playScale: sc.id })} />
+                ))}
+            </div>
+          </>
+        )}
       </section>
     </>
+  );
+}
+
+/** Exercise picker chip: name plus the degree pattern (1 2 3 4 5) so it matches how exercises are described online. */
+function ExerciseChip({ sc, on, onClick }: { sc: ScaleDef; on: boolean; onClick: () => void }) {
+  return (
+    <button className={`chip${on ? ' on' : ''}`} onClick={onClick} style={{ height: 'auto', padding: '5px 10px', flexDirection: 'column', gap: 1, alignItems: 'flex-start' }}>
+      <span style={{ fontSize: 12 }}>{sc.pattern ? sc.short : sc.name}</span>
+      <span className="mono" style={{ fontSize: 10, opacity: 0.75, fontWeight: 500 }}>
+        {sc.pattern ? sc.name : degreeString(sc)}
+      </span>
+    </button>
+  );
+}
+
+/** "Sing: E4" target readout so a beginner always knows which note to aim for. */
+function SingTarget({ target }: { target: number | null }) {
+  return (
+    <span className="row" style={{ gap: 6, fontSize: 11 }}>
+      <span className="dim">Sing</span>
+      <span className="mono" style={{ fontWeight: 700, minWidth: 30, textAlign: 'right', color: target === null ? 'var(--dim)' : 'var(--accent)' }}>
+        {target === null ? '—' : noteLabel(target)}
+      </span>
+    </span>
   );
 }
 

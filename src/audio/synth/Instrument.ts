@@ -74,6 +74,30 @@ class Instrument {
     for (let m = midi - spread; m <= midi + spread; m += 3) void this.loadSample(m);
   }
 
+  private preloadingAll = false;
+  /** Fetch the whole sample set in the background (a few at a time) so no key ever falls back to the beep. */
+  preloadAll(): void {
+    if (this.preloadingAll) return;
+    this.preloadingAll = true;
+    // Vocal range first (C2..C6), then the extremes.
+    const order = [...SAMPLE_NOTES].sort((a, b) => Math.abs(a.midi - 60) - Math.abs(b.midi - 60));
+    const run = async () => {
+      for (let i = 0; i < order.length; i += 3) {
+        await Promise.all(order.slice(i, i + 3).map((s) => this.loadSample(s.midi)));
+      }
+    };
+    void run();
+  }
+
+  /** Nearest sample that is already decoded (any distance), or null. */
+  private nearestLoaded(midi: number): { midi: number; buf: AudioBuffer } | null {
+    let best: { midi: number; buf: AudioBuffer } | null = null;
+    for (const [m, buf] of this.samples) {
+      if (!best || Math.abs(m - midi) < Math.abs(best.midi - midi)) best = { midi: m, buf };
+    }
+    return best;
+  }
+
   /**
    * Play a note. `duration` in seconds; `when` is an AudioContext time (default now).
    * Returns a handle that can stop the note early.
@@ -86,6 +110,10 @@ class Instrument {
       const buf = this.samples.get(s.midi);
       if (buf) return this.playSample(buf, s.midi, midi, duration, t0, velocity);
       void this.loadSample(midi);
+      this.preloadAll();
+      // Still a piano while the exact sample downloads: pitch-shift the nearest loaded one.
+      const near = this.nearestLoaded(midi);
+      if (near) return this.playSample(near.buf, near.midi, midi, duration, t0, velocity);
       return this.playFallback(midi, duration, t0, velocity);
     }
     if (mode === 'vocal') return this.playVocal(midi, duration, t0, velocity);

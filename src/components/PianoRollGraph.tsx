@@ -23,7 +23,7 @@ export interface PianoRollProps {
 const ROWS_EACH_SIDE = 7;
 const HELD_MIN_SEC = 0.35;
 const TIMELINE_H = 16;
-const LABEL_W = 30;
+const LABEL_W = 34;
 
 /**
  * Piano-roll pitch graph: one row per semitone, trace scrolling right-to-left,
@@ -115,6 +115,8 @@ export function PianoRollGraph({ speed, replay = null, now, height = 300 }: Pian
         if (isSharp(m)) {
           g.fillStyle = '#060607';
           g.fillRect(0, y0 + 1, LABEL_W - 8, rowH - 2);
+          g.fillStyle = m === curRow ? '#f5c542' : '#4a4a52';
+          g.fillText(noteLabel(m).replace('#', '♯'), 3, yc);
         } else {
           g.fillStyle = m === curRow ? '#f5c542' : noteName(m) === 'C' ? '#9a9aa4' : '#5c5c66';
           g.fillText(noteLabel(m), 4, yc);
