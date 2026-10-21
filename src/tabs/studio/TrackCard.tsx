@@ -1,15 +1,16 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useStudio } from '../../state/studioStore';
 import { useSettings } from '../../state/settings';
 import { trackPlayer, type PlayerSnapshot } from '../../audio/player/TrackPlayer';
 import { formatTime, formatTimePrecise, parseTime } from '../../music/notes';
-import { Switch } from '../../components/Switch';
+import { LoopTimeline } from '../../components/LoopTimeline';
 
 export function TrackCard() {
   const st = useStudio();
   const settings = useSettings();
-  const expanded = settings.studioExpanded;
   const [snap, setSnap] = useState<PlayerSnapshot>(trackPlayer.state);
+  const [editMarkers, setEditMarkers] = useState(false);
+  const [bigTile, setBigTile] = useState<'transpose' | 'speed' | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const timeEl = useRef<HTMLSpanElement>(null);
   const seekEl = useRef<HTMLInputElement>(null);
@@ -30,9 +31,20 @@ export function TrackCard() {
     return () => cancelAnimationFrame(raf);
   }, []);
 
+  const position = useCallback(() => trackPlayer.estimatePosition(), []);
   const meta = st.meta;
   const sorted = meta ? [...meta.bookmarks].sort((a, b) => a.time - b.time) : [];
-  const loops = sorted.slice(0, -1).map((b, i) => ({ i, a: b, b: sorted[i + 1] }));
+  const sections = Math.max(0, sorted.length - 1);
+  const loopActive = !!meta?.loopOn && meta.activeLoop !== null && meta.activeLoop < sections;
+  const loopLabel = loopActive ? `${meta!.activeLoop! + 1}–${meta!.activeLoop! + 2}` : 'Loop';
+
+  /** Tapping marker i selects the section i→i+1 (last marker: the section before it). */
+  const selectMarker = (i: number) => {
+    if (!meta || sections === 0) return;
+    const idx = Math.min(i, sections - 1);
+    if (meta.loopOn && meta.activeLoop === idx) trackPlayer.seek(sorted[i].time);
+    else st.setActiveLoop(idx);
+  };
 
   return (
     <section className="card">
@@ -56,9 +68,6 @@ export function TrackCard() {
             {st.track ? st.track.name : <span className="dim">No track loaded</span>}
           </span>
         </div>
-        <button className="pill sm ghost" onClick={() => settings.set({ studioExpanded: !expanded })}>
-          {expanded ? 'Less ▴' : 'More ▾'}
-        </button>
       </div>
 
       <div className="row" style={{ marginTop: 8 }}>
@@ -77,8 +86,9 @@ export function TrackCard() {
         </div>
       )}
 
-      {snap.loaded && (
+      {snap.loaded && meta && (
         <>
+          {/* transport */}
           <div className="row" style={{ marginTop: 10 }}>
             <button className={`btn round${snap.playing ? '' : ' primary'}`} onClick={() => trackPlayer.toggle()} aria-label={snap.playing ? 'Pause' : 'Play'}>
               {snap.playing ? '❚❚' : '▶'}
@@ -101,93 +111,110 @@ export function TrackCard() {
                 <span>{formatTime(snap.duration)}</span>
               </div>
             </div>
-          </div>
-          <div className="row wrap" style={{ marginTop: 6 }}>
-            <span className={`pill sm${meta?.loopOn && meta.activeLoop !== null ? ' accent' : ' ghost'}`}>
-              {meta?.loopOn && meta.activeLoop !== null && loops[meta.activeLoop]
-                ? `Loop ${loops[meta.activeLoop].a.name} → ${loops[meta.activeLoop].b.name}`
-                : 'No loop'}
-            </span>
-            {snap.speed !== 1 && <span className="pill sm warn mono">{snap.speed.toFixed(2)}×</span>}
-            {snap.transpose !== 0 && (
-              <span className="pill sm warn mono">
-                {snap.transpose > 0 ? '+' : ''}
-                {snap.transpose} st
-              </span>
-            )}
-          </div>
-        </>
-      )}
-
-      {expanded && snap.loaded && meta && (
-        <>
-          <div className="divider" />
-          <div className="row between">
-            <span className="label">Speed</span>
-            <span className="mono" style={{ fontSize: 12 }}>
-              {snap.speed.toFixed(2)}×
-            </span>
-            <button className="chip sm" onClick={() => setSpeed(1)}>
-              reset
+            <button
+              className={`pill${loopActive ? ' accent' : ' ghost'} mono`}
+              onClick={() => st.cycleLoop()}
+              disabled={sections === 0}
+              title="Cycle loop section"
+              style={{ minWidth: 56, justifyContent: 'center' }}
+            >
+              ⟲ {loopLabel}
             </button>
           </div>
-          <input type="range" min={0.5} max={1.5} step={0.01} value={snap.speed} onChange={(e) => setSpeed(parseFloat(e.target.value))} />
-          <div className="row between" style={{ marginTop: 6 }}>
-            <span className="label">Transpose</span>
-            <div className="row">
-              <button className="btn sm" onClick={() => setTranspose(snap.transpose - 1)}>
-                −
-              </button>
-              <span className="mono" style={{ minWidth: 44, textAlign: 'center', fontWeight: 700 }}>
-                {snap.transpose > 0 ? '+' : ''}
-                {snap.transpose}
-              </span>
-              <button className="btn sm" onClick={() => setTranspose(snap.transpose + 1)}>
+          <div className="row" style={{ marginTop: 8, flexWrap: 'wrap' }}>
+            <StepTile
+              label="Transpose"
+              value={`${snap.transpose > 0 ? '+' : ''}${snap.transpose}`}
+              changed={snap.transpose !== 0}
+              raw={snap.transpose}
+              min={-12}
+              max={12}
+              step={1}
+              big={bigTile === 'transpose'}
+              onBig={(v) => setBigTile(v ? 'transpose' : null)}
+              onSet={(v) => setTranspose(v)}
+              onReset={() => setTranspose(0)}
+            />
+            <StepTile
+              label="Speed"
+              value={`${Math.round(snap.speed * 100)}%`}
+              changed={snap.speed !== 1}
+              raw={snap.speed}
+              min={0.5}
+              max={1.5}
+              step={0.05}
+              big={bigTile === 'speed'}
+              onBig={(v) => setBigTile(v ? 'speed' : null)}
+              onSet={(v) => setSpeed(Math.round(v * 100) / 100)}
+              onReset={() => setSpeed(1)}
+            />
+          </div>
+
+          {/* markers + loop */}
+          <LoopTimeline
+            duration={snap.duration}
+            markers={sorted}
+            activeLoop={loopActive || (meta.activeLoop !== null && meta.activeLoop < sections) ? meta.activeLoop : null}
+            loopOn={meta.loopOn}
+            position={position}
+            onSeek={(sec) => trackPlayer.seek(sec)}
+            onMoveMarker={(id, sec) => st.updateBookmark(id, { time: sec })}
+            onSelectMarker={selectMarker}
+          />
+          <div className="row between" style={{ marginTop: 4 }}>
+            <div className="row" style={{ gap: 6 }}>
+              <button className="tool" onClick={() => st.addBookmark(trackPlayer.estimatePosition())} title="Add marker at playhead">
                 +
               </button>
-              <button className="chip sm" onClick={() => setTranspose(0)}>
-                reset
+              <button className={`tool${meta.loopOn ? ' on' : ''}`} onClick={() => st.setLoopOn(!meta.loopOn)} disabled={sections === 0} title="Loop on/off">
+                ⟲
+              </button>
+              <button className={`tool${editMarkers ? ' on' : ''}`} onClick={() => setEditMarkers((v) => !v)} disabled={sorted.length === 0} title="Edit markers">
+                ✎
               </button>
             </div>
+            <button
+              className="tool"
+              onClick={() => {
+                if (window.confirm('Remove all markers for this track?')) st.clearBookmarks();
+              }}
+              disabled={sorted.length === 0}
+              title="Clear markers"
+              style={{ color: 'var(--bad)' }}
+            >
+              ✕
+            </button>
           </div>
-
-          <div className="divider" />
-          <div className="row between">
-            <span className="label">Bookmarks</span>
-            <div className="row">
-              <button className="chip sm" onClick={() => st.sortBookmarks()} disabled={meta.bookmarks.length < 2}>
-                sort by time
-              </button>
-              <button className="btn sm primary" onClick={() => st.addBookmark(trackPlayer.estimatePosition())}>
-                + Pin here
-              </button>
+          {sorted.length === 0 ? (
+            <div className="empty">Tap + to drop a marker at the playhead. Two markers make a loop section.</div>
+          ) : (
+            <div className="chips scroll" style={{ marginTop: 8 }}>
+              {sorted.map((m, i) => {
+                const on = loopActive && (i === meta.activeLoop || i === meta.activeLoop! + 1);
+                return (
+                  <button key={m.id} className={`marker-chip${on ? ' on' : ''}`} onClick={() => selectMarker(i)} title="Tap: loop from here · tap again: jump">
+                    <span className="row" style={{ gap: 6 }}>
+                      <span className="num">{i + 1}</span>
+                      {!/^Pin \d+$/.test(m.name) && (
+                        <span style={{ fontSize: 11, fontWeight: 600, maxWidth: 90, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.name}</span>
+                      )}
+                    </span>
+                    <span className="t">{formatTimePrecise(m.time)}</span>
+                  </button>
+                );
+              })}
             </div>
-          </div>
-          <div className="list" style={{ marginTop: 8 }}>
-            {meta.bookmarks.length === 0 && <div className="empty">Drop a pin at the playhead to mark a spot.</div>}
-            {meta.bookmarks.map((b) => (
-              <BookmarkRow key={b.id} id={b.id} name={b.name} time={b.time} />
-            ))}
-          </div>
-
-          <div className="divider" />
-          <div className="row between">
-            <span className="label">Loop sections</span>
-            <Switch on={meta.loopOn} onChange={(v) => st.setLoopOn(v)} label={meta.loopOn ? 'Loop on' : 'Loop off'} />
-          </div>
-          <div className="chips" style={{ marginTop: 8 }}>
-            {loops.length === 0 && <div className="empty">Add two or more pins to make a section.</div>}
-            {loops.map((l) => (
-              <button key={l.i} className={`chip sm${meta.activeLoop === l.i ? ' on' : ''}`} onClick={() => st.setActiveLoop(meta.activeLoop === l.i ? null : l.i)}>
-                {l.a.name} → {l.b.name}
-                <span className="mono dim" style={{ marginLeft: 6 }}>
-                  {formatTime(l.a.time)}–{formatTime(l.b.time)}
-                </span>
-              </button>
-            ))}
-          </div>
+          )}
+          {editMarkers && sorted.length > 0 && (
+            <div className="list" style={{ marginTop: 8 }}>
+              {sorted.map((b, i) => (
+                <BookmarkRow key={b.id} index={i} id={b.id} name={b.name} time={b.time} />
+              ))}
+            </div>
+          )}
         </>
       )}
+
     </section>
   );
 
@@ -201,7 +228,84 @@ export function TrackCard() {
   }
 }
 
-function BookmarkRow({ id, name, time }: { id: string; name: string; time: number }) {
+/** Compact −/value/+ tile; the corner button expands it into a full row with a slider. */
+function StepTile({
+  label,
+  value,
+  changed,
+  raw,
+  min,
+  max,
+  step,
+  big,
+  onBig,
+  onSet,
+  onReset,
+}: {
+  label: string;
+  value: string;
+  changed: boolean;
+  raw: number;
+  min: number;
+  max: number;
+  step: number;
+  big: boolean;
+  onBig: (big: boolean) => void;
+  onSet: (v: number) => void;
+  onReset: () => void;
+}) {
+  const color = changed ? 'var(--accent)' : 'var(--text)';
+  if (big) {
+    return (
+      <div className="tile" style={{ flexBasis: '100%' }}>
+        <div className="row between">
+          <button className="tool" onClick={() => onBig(false)} title="Shrink" style={{ width: 28, height: 26 }}>
+            ⤡
+          </button>
+          <span className="label">{label}</span>
+          <button className="mono" style={{ fontSize: 18, fontWeight: 700, color, minWidth: 52, textAlign: 'center' }} onClick={onReset} title="Tap to reset">
+            {value}
+          </button>
+          <button className="tool" onClick={onReset} title="Reset" style={{ width: 28, height: 26 }}>
+            ↺
+          </button>
+        </div>
+        <div className="row" style={{ marginTop: 2 }}>
+          <button className="tile-btn" onClick={() => onSet(Math.max(min, raw - step))} aria-label={`${label} down`}>
+            −
+          </button>
+          <input type="range" min={min} max={max} step={step} value={raw} onChange={(e) => onSet(parseFloat(e.target.value))} />
+          <button className="tile-btn" onClick={() => onSet(Math.min(max, raw + step))} aria-label={`${label} up`}>
+            +
+          </button>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="tile grow" style={{ position: 'relative' }}>
+      <button className="tile-expand" onClick={() => onBig(true)} title="Expand" aria-label={`Expand ${label}`}>
+        ⤢
+      </button>
+      <div className="row between" style={{ gap: 4 }}>
+        <button className="tile-btn" onClick={() => onSet(Math.max(min, raw - step))} aria-label={`${label} down`}>
+          −
+        </button>
+        <button className="mono" style={{ fontSize: 18, fontWeight: 700, color, minWidth: 52 }} onClick={onReset} title="Tap to reset">
+          {value}
+        </button>
+        <button className="tile-btn" onClick={() => onSet(Math.min(max, raw + step))} aria-label={`${label} up`}>
+          +
+        </button>
+      </div>
+      <div className="label" style={{ textAlign: 'center', marginTop: 2 }}>
+        {label}
+      </div>
+    </div>
+  );
+}
+
+function BookmarkRow({ index, id, name, time }: { index: number; id: string; name: string; time: number }) {
   const st = useStudio();
   const [editing, setEditing] = useState<string | null>(null);
   const [nameEdit, setNameEdit] = useState<string | null>(null);
@@ -214,8 +318,11 @@ function BookmarkRow({ id, name, time }: { id: string; name: string; time: numbe
   };
   return (
     <div className="list-item">
+      <span className="num marker-chip" style={{ padding: 0, minWidth: 0, border: 'none', background: 'none' }}>
+        <span className="num">{index + 1}</span>
+      </span>
       {nameEdit === null ? (
-        <button className="grow" style={{ textAlign: 'left', fontWeight: 600, fontSize: 13 }} onClick={() => setNameEdit(name)}>
+        <button className="grow" style={{ textAlign: 'left', fontWeight: 600, fontSize: 13 }} onClick={() => setNameEdit(name)} title="Rename">
           {name}
         </button>
       ) : (
@@ -252,10 +359,7 @@ function BookmarkRow({ id, name, time }: { id: string; name: string; time: numbe
       <button className="chip sm" title="Re-pin to playhead" onClick={() => st.updateBookmark(id, { time: trackPlayer.estimatePosition() })}>
         ⟲
       </button>
-      <button className="chip sm" title="Jump" onClick={() => trackPlayer.seek(time)}>
-        ↦
-      </button>
-      <button className="chip sm danger" title="Delete" onClick={() => st.removeBookmark(id)} style={{ color: 'var(--bad)' }}>
+      <button className="chip sm" title="Delete" onClick={() => st.removeBookmark(id)} style={{ color: 'var(--bad)' }}>
         ✕
       </button>
     </div>

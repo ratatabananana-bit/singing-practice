@@ -25,6 +25,9 @@ export interface StudioState {
   updateBookmark: (id: string, patch: Partial<Bookmark>) => void;
   removeBookmark: (id: string) => void;
   sortBookmarks: () => void;
+  clearBookmarks: () => void;
+  /** Cycle the active loop: section 0 → 1 → … → off. */
+  cycleLoop: () => void;
   setActiveLoop: (index: number | null) => void;
   setLoopOn: (on: boolean) => void;
   refreshTakes: () => Promise<void>;
@@ -52,6 +55,7 @@ function flushMeta() {
 }
 // Don't lose a pin dropped right before the app is closed or backgrounded.
 window.addEventListener('pagehide', flushMeta);
+window.addEventListener('beforeunload', flushMeta);
 document.addEventListener('visibilitychange', () => document.visibilityState === 'hidden' && flushMeta());
 
 function applyLoop(meta: TrackMeta) {
@@ -157,6 +161,24 @@ export const useStudio = create<StudioState>()((set, get) => ({
     const meta = get().meta;
     if (!meta) return;
     get().setMeta({ bookmarks: [...meta.bookmarks].sort((a, b) => a.time - b.time) });
+  },
+  clearBookmarks() {
+    const meta = get().meta;
+    if (!meta) return;
+    const next = { ...meta, bookmarks: [], activeLoop: null, loopOn: false };
+    set({ meta: next });
+    persistMeta(next);
+    applyLoop(next);
+  },
+  cycleLoop() {
+    const meta = get().meta;
+    if (!meta) return;
+    const sections = Math.max(0, meta.bookmarks.length - 1);
+    if (sections === 0) return;
+    const cur = meta.loopOn && meta.activeLoop !== null ? meta.activeLoop : -1;
+    const nextIdx = cur + 1 < sections ? cur + 1 : null;
+    if (nextIdx === null) get().setLoopOn(false);
+    else get().setActiveLoop(nextIdx);
   },
   setActiveLoop(index) {
     const meta = get().meta;

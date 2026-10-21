@@ -1,0 +1,96 @@
+import { useEffect, useRef } from 'react';
+import type { Bookmark } from '../storage/db';
+
+/**
+ * Track timeline with numbered markers (sorted by time), the active loop span shaded,
+ * and a playhead. Tap the bar to seek; drag a marker to move it.
+ */
+export function LoopTimeline({
+  duration,
+  markers,
+  activeLoop,
+  loopOn,
+  position,
+  onSeek,
+  onMoveMarker,
+  onSelectMarker,
+}: {
+  duration: number;
+  /** Sorted by time. */
+  markers: Bookmark[];
+  activeLoop: number | null;
+  loopOn: boolean;
+  /** Current position in seconds (called every frame). */
+  position: () => number;
+  onSeek: (sec: number) => void;
+  onMoveMarker: (id: string, sec: number) => void;
+  onSelectMarker: (index: number) => void;
+}) {
+  const bar = useRef<HTMLDivElement>(null);
+  const head = useRef<HTMLDivElement>(null);
+  const drag = useRef<{ id: string; moved: boolean; index: number } | null>(null);
+
+  useEffect(() => {
+    let raf = 0;
+    const tick = () => {
+      raf = requestAnimationFrame(tick);
+      if (head.current && duration > 0) head.current.style.left = `${(position() / duration) * 100}%`;
+    };
+    tick();
+    return () => cancelAnimationFrame(raf);
+  }, [position, duration]);
+
+  const secAt = (clientX: number) => {
+    const r = bar.current!.getBoundingClientRect();
+    return Math.max(0, Math.min(duration, ((clientX - r.left) / r.width) * duration));
+  };
+  const pct = (sec: number) => (duration > 0 ? (sec / duration) * 100 : 0);
+
+  const a = activeLoop !== null ? markers[activeLoop] : undefined;
+  const b = activeLoop !== null ? markers[activeLoop + 1] : undefined;
+
+  return (
+    <div
+      className="timeline"
+      ref={bar}
+      onPointerDown={(e) => {
+        if (drag.current) return;
+        onSeek(secAt(e.clientX));
+      }}
+      onPointerMove={(e) => {
+        const d = drag.current;
+        if (!d) return;
+        d.moved = true;
+        onMoveMarker(d.id, secAt(e.clientX));
+      }}
+      onPointerUp={(e) => {
+        const d = drag.current;
+        drag.current = null;
+        if (d && !d.moved) onSelectMarker(d.index);
+        (e.currentTarget as HTMLElement).releasePointerCapture?.(e.pointerId);
+      }}
+      onPointerCancel={() => (drag.current = null)}
+    >
+      <div className="timeline-track" />
+      {a && b && (
+        <div className={`timeline-loop${loopOn ? ' on' : ''}`} style={{ left: `${pct(a.time)}%`, width: `${pct(b.time) - pct(a.time)}%` }} />
+      )}
+      <div className="timeline-head" ref={head} />
+      {markers.map((m, i) => (
+        <button
+          key={m.id}
+          className={`timeline-pin${activeLoop !== null && (i === activeLoop || i === activeLoop + 1) ? ' on' : ''}`}
+          style={{ left: `${pct(m.time)}%` }}
+          onPointerDown={(e) => {
+            e.stopPropagation();
+            drag.current = { id: m.id, moved: false, index: i };
+            bar.current!.setPointerCapture(e.pointerId);
+          }}
+          title={m.name}
+        >
+          {i + 1}
+        </button>
+      ))}
+    </div>
+  );
+}
