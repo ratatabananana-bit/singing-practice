@@ -18,6 +18,10 @@ export interface StudioState {
   replayTakeId: string | null;
   error: string | null;
   busy: boolean;
+  /** Speed trainer: raise speed by stepPct after each loop pass until targetPct. */
+  trainer: { on: boolean; startPct: number; targetPct: number; stepPct: number };
+  /** Count-in in progress (clicks left), 0 = none. */
+  countdown: number;
 
   loadFile: (file: File) => Promise<void>;
   loadLast: () => Promise<void>;
@@ -39,6 +43,8 @@ export interface StudioState {
   playTake: (id: string) => Promise<void>;
   stopTake: () => void;
   setError: (e: string | null) => void;
+  setTrainer: (t: Partial<StudioState['trainer']>) => void;
+  toggleStar: (id: string) => Promise<void>;
 }
 
 let persistTimer: number | null = null;
@@ -89,6 +95,8 @@ export const useStudio = create<StudioState>()((set, get) => ({
   replayTakeId: null,
   error: null,
   busy: false,
+  trainer: { on: false, startPct: 70, targetPct: 100, stepPct: 5 },
+  countdown: 0,
 
   async loadFile(file) {
     set({ busy: true, error: null });
@@ -111,6 +119,8 @@ export const useStudio = create<StudioState>()((set, get) => ({
     set({ track: { id, name: file.name }, meta, busy: false });
     trackPlayer.setSpeed(meta.speed);
     trackPlayer.setTranspose(meta.transpose);
+    trackPlayer.setFineCents(meta.fineCents ?? 0);
+    trackPlayer.setLoopGap(meta.loopGap ?? 0);
     applyLoop(meta);
   },
 
@@ -134,6 +144,8 @@ export const useStudio = create<StudioState>()((set, get) => ({
     set({ track: { id, name: rec.name }, meta, busy: false });
     trackPlayer.setSpeed(meta.speed);
     trackPlayer.setTranspose(meta.transpose);
+    trackPlayer.setFineCents(meta.fineCents ?? 0);
+    trackPlayer.setLoopGap(meta.loopGap ?? 0);
     applyLoop(meta);
     if (meta.lastPosition > 0) trackPlayer.seek(meta.lastPosition);
   },
@@ -260,7 +272,26 @@ export const useStudio = create<StudioState>()((set, get) => ({
     set({ replayTakeId: null });
   },
   setError: (e) => set({ error: e }),
+  setTrainer: (t) => set({ trainer: { ...get().trainer, ...t } }),
+  async toggleStar(id) {
+    const take = get().takes.find((x) => x.id === id);
+    if (!take) return;
+    const starred = !take.starred;
+    await storage.updateTake(id, { starred });
+    set({ takes: get().takes.map((x) => (x.id === id ? { ...x, starred } : x)) });
+  },
 }));
+
+// Speed trainer: after each loop pass, step the speed toward the target.
+trackPlayer.onWrap(() => {
+  const st = useStudio.getState();
+  if (!st.trainer.on) return;
+  const cur = Math.round(trackPlayer.state.speed * 100);
+  if (cur >= st.trainer.targetPct) return;
+  const next = Math.min(st.trainer.targetPct, cur + st.trainer.stepPct);
+  trackPlayer.setSpeed(next / 100);
+  st.setMeta({ speed: next / 100 });
+});
 
 // Remember playback position per track.
 let posTimer = 0;

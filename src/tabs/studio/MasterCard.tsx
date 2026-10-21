@@ -7,7 +7,9 @@ import { denoise } from '../../audio/dsp/denoise';
 import { encodeWav, waveformSummary } from '../../audio/dsp/wav';
 import { getAudioContext } from '../../audio/context';
 import { centsOff } from '../../music/notes';
-import { PianoRollGraph, type ReplaySource } from '../../components/PianoRollGraph';
+import { PianoRollGraph, type ReplaySource, type ReferenceSource } from '../../components/PianoRollGraph';
+import { trackPlayer } from '../../audio/player/TrackPlayer';
+import { instrument } from '../../audio/synth/Instrument';
 import { LoudnessMeter } from '../../components/LoudnessMeter';
 import { NoteSlots } from '../../components/NoteSlots';
 import { Switch } from '../../components/Switch';
@@ -28,8 +30,25 @@ export function MasterCard() {
     [replayTake],
   );
 
-  const status = st.recording ? 'RECORDING' : replayTake && takePlaying ? 'REPLAY' : micState === 'running' ? 'LIVE' : micState === 'starting' ? '…' : 'PAUSED';
-  const statusCls = st.recording ? 'bad' : status === 'REPLAY' ? 'accent' : status === 'LIVE' ? 'good' : 'ghost';
+  const status = st.countdown > 0 ? String(st.countdown) : st.recording ? 'RECORDING' : replayTake && takePlaying ? 'REPLAY' : micState === 'running' ? 'LIVE' : micState === 'starting' ? '…' : 'PAUSED';
+  const statusCls = st.countdown > 0 ? 'accent' : st.recording ? 'bad' : status === 'REPLAY' ? 'accent' : status === 'LIVE' ? 'good' : 'ghost';
+  const takeStart = useRef(-1);
+
+  // Starred take = reference trace under the live line while the track plays.
+  const starred = st.takes.find((t) => t.starred && t.trackId === st.track?.id && (t.trackStart ?? -1) >= 0);
+  const reference = useMemo<ReferenceSource | null>(
+    () =>
+      starred
+        ? {
+            trace: starred.trace,
+            trackStart: starred.trackStart!,
+            trackPos: () => trackPlayer.estimatePosition(),
+            trackSpeed: () => trackPlayer.state.speed,
+            playing: () => trackPlayer.state.playing,
+          }
+        : null,
+    [starred],
+  );
 
   const toggleRecord = async () => {
     if (st.recording) {
@@ -49,6 +68,8 @@ export function MasterCard() {
           wav,
           trace: rec.trace,
           wave: waveformSummary(pcm, 160),
+          trackStart: takeStart.current,
+          trackId: st.track?.id ?? null,
         };
         await st.addTake(take);
         if (settings.autoPlayLastTake) await useStudio.getState().playTake(take.id);
@@ -59,7 +80,21 @@ export function MasterCard() {
       }
     } else {
       if (replayTake) st.stopTake();
+      if (st.countdown > 0) return;
+      if (settings.countIn) {
+        // Four clicks at 100 BPM (Transpose's fallback tempo), then record.
+        const ctx = getAudioContext();
+        const beat = 0.6;
+        const t0 = ctx.currentTime + 0.05;
+        for (let i = 0; i < 4; i++) instrument.click(t0 + i * beat, i === 0);
+        for (let i = 0; i < 4; i++) setTimeout(() => useStudio.setState({ countdown: 4 - i }), i * beat * 1000);
+        await new Promise((r) => setTimeout(r, 4 * beat * 1000));
+        useStudio.setState({ countdown: 0 });
+      }
+      takeStart.current = trackPlayer.state.loaded && trackPlayer.state.playing ? trackPlayer.estimatePosition() : trackPlayer.state.loaded ? trackPlayer.state.position : -1;
       await recorder.start(totalLatencyMs(settings) / 1000);
+      // Start the track with the take when it is loaded but paused, so the take lines up from 0.
+      if (trackPlayer.state.loaded && !trackPlayer.state.playing) void trackPlayer.play();
       useStudio.setState({ recording: true });
     }
   };
@@ -76,7 +111,7 @@ export function MasterCard() {
         </button>
       </div>
       <div className="row" style={{ marginTop: 8, alignItems: 'stretch' }}>
-        <PianoRollGraph speed={settings.graphSpeed} replay={takePlaying ? replay : null} now={() => getAudioContext().currentTime} height={300} />
+        <PianoRollGraph speed={settings.graphSpeed} replay={takePlaying ? replay : null} reference={reference} now={() => getAudioContext().currentTime} height={300} />
         <MasterMeter />
       </div>
       <div className="divider" />
@@ -93,6 +128,7 @@ export function MasterCard() {
           </div>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-end' }}>
+          <Switch on={settings.countIn} onChange={(v) => settings.set({ countIn: v })} label="Count-in" />
           <Switch on={settings.autoPlayLastTake} onChange={(v) => settings.set({ autoPlayLastTake: v })} label="Auto-play last take" />
           <Switch on={settings.denoise} onChange={(v) => settings.set({ denoise: v })} label="Denoise" />
         </div>

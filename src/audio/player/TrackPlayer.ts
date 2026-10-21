@@ -8,6 +8,10 @@ export interface PlayerSnapshot {
   duration: number;
   speed: number;
   transpose: number;
+  /** Fine pitch offset in cents, added to transpose. */
+  fineCents: number;
+  /** Silence after each loop wrap, seconds. */
+  loopGap: number;
   loopOn: boolean;
   loopStart: number;
   loopEnd: number;
@@ -29,6 +33,8 @@ export class TrackPlayer {
     duration: 0,
     speed: 1,
     transpose: 0,
+    fineCents: 0,
+    loopGap: 0,
     loopOn: false,
     loopStart: 0,
     loopEnd: 0,
@@ -38,6 +44,7 @@ export class TrackPlayer {
   private lastReportAt = 0;
   private lastReportPos = 0;
   private endedCb: (() => void) | null = null;
+  private wrapCbs = new Set<() => void>();
   private ready: Promise<void> | null = null;
 
   get state(): PlayerSnapshot {
@@ -52,6 +59,12 @@ export class TrackPlayer {
 
   onEnded(cb: () => void): void {
     this.endedCb = cb;
+  }
+
+  /** Called each time the loop wraps back to its start. */
+  onWrap(cb: () => void): () => void {
+    this.wrapCbs.add(cb);
+    return () => this.wrapCbs.delete(cb);
   }
 
   private emit(p: Partial<PlayerSnapshot>): void {
@@ -80,6 +93,8 @@ export class TrackPlayer {
           } else if (m.type === 'ended') {
             this.emit({ playing: false });
             this.endedCb?.();
+          } else if (m.type === 'wrap') {
+            for (const cb of this.wrapCbs) cb();
           }
         };
         this.gain = ctx.createGain();
@@ -103,7 +118,8 @@ export class TrackPlayer {
     this.emit({ loaded: true, playing: false, position: 0, duration: buf.duration, loopOn: false, loopStart: 0, loopEnd: 0 });
     // re-apply speed/transpose
     node.port.postMessage({ type: 'tempo', value: this.snap.speed });
-    node.port.postMessage({ type: 'pitch', value: this.snap.transpose });
+    node.port.postMessage({ type: 'pitch', value: this.snap.transpose + this.snap.fineCents / 100 });
+    node.port.postMessage({ type: 'loopGap', frames: Math.round(this.snap.loopGap * this.sampleRate) });
     return buf.duration;
   }
 
@@ -138,15 +154,27 @@ export class TrackPlayer {
   }
 
   setSpeed(speed: number): void {
-    const v = Math.max(0.25, Math.min(2, speed));
+    const v = Math.max(0.25, Math.min(2.5, speed));
     this.node?.port.postMessage({ type: 'tempo', value: v });
     this.emit({ speed: v });
   }
 
   setTranspose(semitones: number): void {
-    const v = Math.max(-12, Math.min(12, semitones));
-    this.node?.port.postMessage({ type: 'pitch', value: v });
+    const v = Math.max(-12, Math.min(12, Math.round(semitones)));
+    this.node?.port.postMessage({ type: 'pitch', value: v + this.snap.fineCents / 100 });
     this.emit({ transpose: v });
+  }
+
+  setFineCents(cents: number): void {
+    const c = Math.max(-50, Math.min(50, Math.round(cents)));
+    this.node?.port.postMessage({ type: 'pitch', value: this.snap.transpose + c / 100 });
+    this.emit({ fineCents: c });
+  }
+
+  setLoopGap(seconds: number): void {
+    const g = Math.max(0, Math.min(5, seconds));
+    this.node?.port.postMessage({ type: 'loopGap', frames: Math.round(g * this.sampleRate) });
+    this.emit({ loopGap: g });
   }
 
   setLoop(on: boolean, start: number, end: number): void {

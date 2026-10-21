@@ -134,6 +134,7 @@ export function TrackCard() {
             </div>
             <button
               className={`pill${loopActive || pending !== null ? ' accent' : ' ghost'} mono`}
+              onContextMenu={(e) => e.preventDefault()}
               onClick={() => st.cycleLoop()}
               disabled={sections === 0}
               title="Cycle through sections"
@@ -161,8 +162,8 @@ export function TrackCard() {
               value={`${Math.round(snap.speed * 100)}%`}
               changed={snap.speed !== 1}
               raw={snap.speed}
-              min={0.5}
-              max={1.5}
+              min={0.25}
+              max={2}
               step={0.05}
               big={bigTile === 'speed'}
               onBig={(v) => setBigTile(v ? 'speed' : null)}
@@ -170,6 +171,37 @@ export function TrackCard() {
               onReset={() => setSpeed(1)}
             />
           </div>
+          {bigTile === 'speed' && (
+            <div className="row wrap" style={{ marginTop: 6, gap: 6, fontSize: 12 }}>
+              <button className={`pill sm${st.trainer.on ? ' accent' : ' ghost'}`} onClick={() => st.setTrainer({ on: !st.trainer.on })} title="Raise the speed a little after every loop pass">
+                Trainer {st.trainer.on ? 'on' : 'off'}
+              </button>
+              {st.trainer.on && (
+                <>
+                  <span className="muted">from</span>
+                  <PctStep value={st.trainer.startPct} onChange={(v) => { st.setTrainer({ startPct: v }); setSpeed(v / 100); }} />
+                  <span className="muted">to</span>
+                  <PctStep value={st.trainer.targetPct} onChange={(v) => st.setTrainer({ targetPct: v })} />
+                  <span className="muted">step</span>
+                  <PctStep value={st.trainer.stepPct} onChange={(v) => st.setTrainer({ stepPct: Math.max(1, v) })} min={1} max={25} />
+                  <span className="dim">per loop pass</span>
+                </>
+              )}
+            </div>
+          )}
+          {bigTile === 'transpose' && (
+            <div className="row" style={{ marginTop: 6, gap: 8, fontSize: 12 }}>
+              <span className="muted">Fine</span>
+              <input type="range" min={-50} max={50} step={1} value={snap.fineCents} onChange={(e) => setFine(parseInt(e.target.value, 10))} />
+              <span className="mono" style={{ minWidth: 42, textAlign: 'right' }}>
+                {snap.fineCents >= 0 ? '+' : '−'}
+                {Math.abs(snap.fineCents)}¢
+              </span>
+              <button className="chip sm" onClick={() => setFine(0)}>
+                0
+              </button>
+            </div>
+          )}
 
           {/* markers + loop */}
           <LoopTimeline
@@ -191,6 +223,15 @@ export function TrackCard() {
               </button>
               <button className={`tool${meta.loopOn ? ' on' : ''}`} onClick={() => st.setLoopOn(!meta.loopOn)} disabled={sections === 0} title="Loop on/off">
                 ⟲
+              </button>
+              <button
+                className={`tool${snap.loopGap > 0 ? ' on' : ''}`}
+                onClick={() => setGap(snap.loopGap >= 2 ? 0 : snap.loopGap + 1)}
+                disabled={sections === 0}
+                title="Pause before the loop restarts: 0 / 1 / 2 s"
+                style={{ width: 'auto', padding: '0 8px', fontSize: 11 }}
+              >
+                gap {snap.loopGap}s
               </button>
               <button className={`tool${editMarkers ? ' on' : ''}`} onClick={() => setEditMarkers((v) => !v)} disabled={sorted.length === 0} title="Edit markers">
                 ✎
@@ -252,6 +293,30 @@ export function TrackCard() {
     trackPlayer.setTranspose(v);
     st.setMeta({ transpose: trackPlayer.state.transpose });
   }
+  function setFine(c: number) {
+    trackPlayer.setFineCents(c);
+    st.setMeta({ fineCents: trackPlayer.state.fineCents });
+  }
+  function setGap(sec: number) {
+    trackPlayer.setLoopGap(sec);
+    st.setMeta({ loopGap: trackPlayer.state.loopGap });
+  }
+}
+
+function PctStep({ value, onChange, min = 25, max = 200 }: { value: number; onChange: (v: number) => void; min?: number; max?: number }) {
+  return (
+    <span className="row" style={{ gap: 2 }}>
+      <button className="chip sm" onClick={() => onChange(Math.max(min, value - 5))}>
+        −
+      </button>
+      <span className="mono" style={{ minWidth: 38, textAlign: 'center', fontWeight: 700 }}>
+        {value}%
+      </span>
+      <button className="chip sm" onClick={() => onChange(Math.min(max, value + 5))}>
+        +
+      </button>
+    </span>
+  );
 }
 
 /** Compact −/value/+ tile; the corner button expands it into a full row with a slider. */

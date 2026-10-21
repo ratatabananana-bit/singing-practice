@@ -18,6 +18,11 @@ class LoopingSource {
   loopStart = 0;
   loopEnd = 0;
   loopOn = false;
+  /** Silence inserted after each loop wrap (frames). */
+  gapFrames = 0;
+  private gapLeft = 0;
+  /** Set to true by extract() when the loop wraps; the processor reports and clears it. */
+  wrapped = false;
   /** Frames handed to the pipeline since the last seek (for latency compensation). */
   consumed = 0;
   ended = false;
@@ -25,8 +30,24 @@ class LoopingSource {
   extract(target: Float32Array, numFrames: number, _position: number): number {
     if (this.length === 0) return 0;
     for (let i = 0; i < numFrames; i++) {
+      if (this.gapLeft > 0) {
+        target[i * 2] = 0;
+        target[i * 2 + 1] = 0;
+        this.gapLeft--;
+        this.consumed++;
+        continue;
+      }
       if (this.loopOn && this.loopEnd > this.loopStart && this.cursor >= this.loopEnd) {
         this.cursor = this.loopStart;
+        this.wrapped = true;
+        if (this.gapFrames > 0) {
+          this.gapLeft = this.gapFrames;
+          target[i * 2] = 0;
+          target[i * 2 + 1] = 0;
+          this.gapLeft--;
+          this.consumed++;
+          continue;
+        }
       }
       if (this.cursor < this.length) {
         target[i * 2] = this.left[this.cursor];
@@ -108,6 +129,9 @@ class StretchProcessor extends AudioWorkletProcessor {
         s.loopEnd = Math.min(s.length, Math.floor(m.end as number));
         break;
       }
+      case 'loopGap':
+        this.source.gapFrames = Math.max(0, Math.floor(m.frames as number));
+        break;
       case 'unload':
         this.source.left = new Float32Array(0);
         this.source.right = new Float32Array(0);
@@ -154,6 +178,10 @@ class StretchProcessor extends AudioWorkletProcessor {
   }
 
   private report(force = false): void {
+    if (this.source.wrapped) {
+      this.source.wrapped = false;
+      this.port.postMessage({ type: 'wrap' });
+    }
     this.reportCounter++;
     if (force || this.reportCounter >= 8) {
       this.reportCounter = 0;

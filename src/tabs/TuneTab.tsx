@@ -12,13 +12,16 @@ import { LoudnessMeter, loudnessStatus } from '../components/LoudnessMeter';
 import { useDisplayMidi, useMicState } from '../state/pitchStore';
 import { Median3 } from '../audio/pitch/tracker';
 import { smoothTrace } from '../components/traceSmooth';
+import { steadiness } from '../music/scoring';
+import { RangePill } from '../components/RangeControl';
 
-const IN_TUNE = 25; // cents
 const GRAPH_SECONDS = 7;
 
 interface Nailed {
   midi: number;
   cents: number;
+  /** 0..1, 1 = perfectly steady during the hold. */
+  steady: number;
   at: number;
 }
 
@@ -68,8 +71,8 @@ export function TuneTab() {
   }, [cueKey]);
 
   const onNailed = useCallback(
-    (midi: number, cents: number) => {
-      setNailed((n) => [{ midi, cents, at: Date.now() }, ...n].slice(0, 50));
+    (midi: number, cents: number, steady: number) => {
+      setNailed((n) => [{ midi, cents, steady, at: Date.now() }, ...n].slice(0, 50));
       if (useSettings.getState().tuneMode === 'scale') advance();
     },
     [advance],
@@ -110,7 +113,12 @@ export function TuneTab() {
             Exercise
           </button>
         </div>
-        {scaleMode && <RunOptionPills />}
+        {scaleMode && (
+          <div className="row" style={{ gap: 6 }}>
+            <RunOptionPills />
+            <RangePill />
+          </div>
+        )}
       </div>
 
       {scaleMode && (
@@ -148,12 +156,16 @@ export function TuneTab() {
           <div className="empty">Hold a note to log it.</div>
         ) : (
           <div className="chips" style={{ marginTop: 8 }}>
+            <SessionBias nailed={nailed} />
             {nailed.map((n) => (
-              <span key={n.at} className={`chip sm${Math.abs(n.cents) <= 10 ? ' on' : ''}`}>
+              <span key={n.at} className={`chip sm${Math.abs(n.cents) <= 10 ? ' on' : ''}`} title={`steadiness ${Math.round(n.steady * 100)}%`}>
                 {noteLabel(n.midi)}
                 <span className="mono" style={{ marginLeft: 5, opacity: 0.8 }}>
                   {n.cents >= 0 ? '+' : '−'}
                   {Math.abs(Math.round(n.cents))}¢
+                </span>
+                <span className="mono" style={{ marginLeft: 5, opacity: 0.6, fontSize: 10 }}>
+                  {n.steady >= 0.8 ? '▬' : n.steady >= 0.5 ? '〰' : '≈'}
                 </span>
               </span>
             ))}
@@ -189,7 +201,7 @@ function TunerCard({
   onNext,
 }: {
   target: number;
-  onNailed: (midi: number, cents: number) => void;
+  onNailed: (midi: number, cents: number, steady: number) => void;
   onAttempt: (attempting: boolean) => void;
   onPlay: () => void;
   progress: { i: number; n: number } | null;
@@ -242,7 +254,8 @@ function TunerCard({
         histC.current.shift();
       }
 
-      const inTune = voiced && Math.abs(cents) <= IN_TUNE;
+      const tol = st.toleranceCents;
+      const inTune = voiced && Math.abs(cents) <= tol;
       if (inTune) {
         hold = Math.min(1, hold + dt / st.holdSeconds);
         nailCents.push(cents);
@@ -257,7 +270,7 @@ function TunerCard({
       }
       if (hold >= 1) {
         const avg = nailCents.length ? nailCents.reduce((a, b) => a + b, 0) / nailCents.length : 0;
-        cb.current.onNailed(targetRef.current, avg);
+        cb.current.onNailed(targetRef.current, avg, steadiness(nailCents));
         nailCents = [];
         hold = 0;
         med.reset();
@@ -274,18 +287,19 @@ function TunerCard({
 
   const holdSeconds = useSettings((x) => x.holdSeconds);
   const silenceDb = useSettings((x) => x.silenceDb);
+  const tolerance = useSettings((x) => x.toleranceCents);
   const st = { holdSeconds, silenceDb };
   const semis = Math.round(Math.abs(live.cents) / 100);
   const tuneStatus = !live.voiced
     ? 'Listening'
-    : Math.abs(live.cents) <= IN_TUNE
+    : Math.abs(live.cents) <= tolerance
       ? 'In tune'
       : Math.abs(live.cents) > 100
         ? `Far off · ${semis} semitone${semis === 1 ? '' : 's'} ${live.cents < 0 ? 'low' : 'high'}`
         : live.cents < 0
           ? 'Flat'
           : 'Sharp';
-  const statusCls = !live.voiced ? 'ghost' : Math.abs(live.cents) <= IN_TUNE ? 'good' : Math.abs(live.cents) > 100 ? 'bad' : 'warn';
+  const statusCls = !live.voiced ? 'ghost' : Math.abs(live.cents) <= tolerance ? 'good' : Math.abs(live.cents) > 100 ? 'bad' : 'warn';
   const keyCls = !keyGuess ? 'ghost' : keyGuess.confidence > 0.6 ? 'good' : keyGuess.confidence > 0.35 ? 'warn' : 'ghost';
 
   return (
@@ -347,7 +361,7 @@ function TunerCard({
         </div>
       </div>
       <div className="row" style={{ marginTop: 10, alignItems: 'stretch' }}>
-        <TuneGraph histT={histT} histC={histC} target={target} />
+        <TuneGraph histT={histT} histC={histC} target={target} tolerance={tolerance} />
         <LoudnessMeter db={live.db} height={150} />
       </div>
       <div className="row wrap" style={{ marginTop: 8 }}>
@@ -362,10 +376,12 @@ function TunerCard({
 }
 
 /** Scrolling cents-deviation graph (~7 s). Holds the last value when silent. */
-function TuneGraph({ histT, histC, target }: { histT: React.RefObject<number[]>; histC: React.RefObject<number[]>; target: number }) {
+function TuneGraph({ histT, histC, target, tolerance }: { histT: React.RefObject<number[]>; histC: React.RefObject<number[]>; target: number; tolerance: number }) {
   const ref = useRef<HTMLCanvasElement>(null);
   const targetRef = useRef(target);
   targetRef.current = target;
+  const tolRef = useRef(tolerance);
+  tolRef.current = tolerance;
   useEffect(() => {
     const cv = ref.current!;
     let raf = 0;
@@ -385,6 +401,7 @@ function TuneGraph({ histT, histC, target }: { histT: React.RefObject<number[]>;
       const range = 250; // ±2.5 semitones visible
       const yOf = (c: number) => h / 2 - (c / range) * (h / 2);
       g.fillStyle = 'rgba(74,222,128,0.12)';
+      const IN_TUNE = tolRef.current;
       g.fillRect(0, yOf(IN_TUNE), w, yOf(-IN_TUNE) - yOf(IN_TUNE));
       g.strokeStyle = '#2b2b32';
       g.lineWidth = 1;
@@ -456,4 +473,25 @@ function TuneGraph({ histT, histC, target }: { histT: React.RefObject<number[]>;
     return () => cancelAnimationFrame(raf);
   }, [histT, histC]);
   return <canvas ref={ref} className="graph grow" style={{ height: 150 }} />;
+}
+
+/** Flat / sharp / precise counts for the session (the diagnostic Singing Carrots users praise). */
+function SessionBias({ nailed }: { nailed: Nailed[] }) {
+  const tol = useSettings((x) => x.toleranceCents);
+  const precise = nailed.filter((n) => Math.abs(n.cents) <= tol / 2).length;
+  const flat = nailed.filter((n) => n.cents < -tol / 2).length;
+  const sharp = nailed.filter((n) => n.cents > tol / 2).length;
+  const avg = nailed.reduce((a, n) => a + n.cents, 0) / nailed.length;
+  const steady = nailed.reduce((a, n) => a + n.steady, 0) / nailed.length;
+  return (
+    <span className="pill sm ghost mono" style={{ width: '100%', justifyContent: 'space-between' }}>
+      <span>
+        {precise} precise · {flat} flat · {sharp} sharp
+      </span>
+      <span>
+        avg {avg >= 0 ? '+' : '−'}
+        {Math.abs(Math.round(avg))}¢ · steady {Math.round(steady * 100)}%
+      </span>
+    </span>
+  );
 }

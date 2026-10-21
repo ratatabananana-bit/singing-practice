@@ -12,9 +12,22 @@ export interface ReplaySource {
   duration: number;
 }
 
+export interface ReferenceSource {
+  /** [time, midi] pairs relative to the take start. */
+  trace: Float32Array;
+  /** Track position when the take started. */
+  trackStart: number;
+  /** Current track position and playback speed. */
+  trackPos: () => number;
+  trackSpeed: () => number;
+  playing: () => boolean;
+}
+
 export interface PianoRollProps {
   /** px per second scroll speed. */
   speed: number;
+  /** A starred take drawn faint under the live trace, aligned to the backing track. */
+  reference?: ReferenceSource | null;
   /** When set, draw this take's trace synced to playback instead of the live mic. */
   replay?: ReplaySource | null;
   /** Current audio time (live mode). */
@@ -32,18 +45,18 @@ const LABEL_W = 34;
  * Piano-roll pitch graph: one row per semitone, trace scrolling right-to-left,
  * held-note bars, timeline on top with a "now" cursor. Auto-centers smoothly.
  */
-export function PianoRollGraph({ speed, replay = null, now, height = 300 }: PianoRollProps) {
+export function PianoRollGraph({ speed, replay = null, reference = null, now, height = 300 }: PianoRollProps) {
   const ref = useRef<HTMLCanvasElement>(null);
   const centerRef = useRef(60);
-  const props = useRef({ speed, replay, now });
-  props.current = { speed, replay, now };
+  const props = useRef({ speed, replay, reference, now });
+  props.current = { speed, replay, reference, now };
 
   useEffect(() => {
     const cv = ref.current!;
     let raf = 0;
     const draw = () => {
       raf = requestAnimationFrame(draw);
-      const { speed, replay, now } = props.current;
+      const { speed, replay, reference, now } = props.current;
       const smoothing = useSettings.getState().pitch.graphSmoothing;
       const dpr = window.devicePixelRatio || 1;
       const w = cv.clientWidth;
@@ -158,6 +171,35 @@ export function PianoRollGraph({ speed, replay = null, now, height = 300 }: Pian
         }
       }
       flush();
+
+      // ---- reference take (faint), mapped from track time to screen time
+      if (!replay && reference && reference.playing()) {
+        const pos = reference.trackPos();
+        const spd = Math.max(0.1, reference.trackSpeed());
+        const tr = reference.trace;
+        g.lineWidth = 3;
+        g.strokeStyle = 'rgba(245,197,66,0.35)';
+        g.beginPath();
+        let pen = false;
+        let lastT = 0;
+        for (let i = 0; i < tr.length; i += 2) {
+          const trackT = reference.trackStart + tr[i];
+          const t = tNow - (pos - trackT) / spd;
+          if (t < tMin) continue;
+          if (t > tNow + 0.05) break;
+          const m = tr[i + 1];
+          if (m <= 0 || t - lastT > 0.15) pen = false;
+          if (m <= 0) continue;
+          const x = xOfT(t);
+          const y = yOfMidi(m);
+          if (!pen) {
+            g.moveTo(x, y);
+            pen = true;
+          } else g.lineTo(x, y);
+          lastT = t;
+        }
+        g.stroke();
+      }
 
       // ---- trace (display smoothing; raw values stay untouched for tuning)
       const sm = smoothTrace(

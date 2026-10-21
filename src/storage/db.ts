@@ -25,6 +25,8 @@ export interface TrackMeta {
   loopOn: boolean;
   speed: number;
   transpose: number;
+  fineCents?: number;
+  loopGap?: number;
   lastPosition: number;
 }
 
@@ -39,6 +41,11 @@ export interface TakeRecord {
   trace: Float32Array;
   /** Downsampled min/max/rms waveform for the thumbnail. */
   wave: Float32Array;
+  /** Starred takes are never evicted and act as the reference trace in the master graph. */
+  starred?: boolean;
+  /** Track position (seconds) when the take started, if a track was playing; -1 otherwise. */
+  trackStart?: number;
+  trackId?: string | null;
 }
 
 interface SingDB extends DBSchema {
@@ -107,13 +114,20 @@ export const storage = {
     const d = await db();
     await d.put('takes', take);
     const all = (await d.getAllFromIndex('takes', 'createdAt')).reverse();
-    const evicted = all.slice(MAX_TAKES);
+    // Keep every starred take plus the newest MAX_TAKES unstarred ones.
+    const unstarred = all.filter((t) => !t.starred);
+    const evicted = unstarred.slice(MAX_TAKES);
     for (const e of evicted) await d.delete('takes', e.id);
-    return all.slice(0, MAX_TAKES);
+    return all.filter((t) => !evicted.includes(t));
   },
   async listTakes(): Promise<TakeRecord[]> {
     const d = await db();
     return (await d.getAllFromIndex('takes', 'createdAt')).reverse();
+  },
+  async updateTake(id: string, patch: Partial<TakeRecord>): Promise<void> {
+    const d = await db();
+    const t = await d.get('takes', id);
+    if (t) await d.put('takes', { ...t, ...patch });
   },
   async deleteTake(id: string): Promise<void> {
     const d = await db();

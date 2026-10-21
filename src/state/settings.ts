@@ -54,6 +54,8 @@ export interface SettingsState {
   measuredLatencyMs: number | null;
   pitch: PitchDebug;
   autoPlayLastTake: boolean;
+  /** Four clicks before recording starts. */
+  countIn: boolean;
   denoise: boolean;
   /** "In tune" tolerance in cents (Tune tab); the Play pill allows 10 more. */
   toleranceCents: number;
@@ -96,6 +98,7 @@ export const useSettings = create<SettingsState>()(
       measuredLatencyMs: null,
       pitch: { ...DEFAULT_PITCH_DEBUG },
       autoPlayLastTake: true,
+      countIn: true,
       denoise: false,
       toleranceCents: 20,
       rangeLow: null,

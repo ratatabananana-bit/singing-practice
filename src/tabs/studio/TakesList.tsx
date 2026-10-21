@@ -11,7 +11,7 @@ export function TakesList() {
       <div className="row between">
         <span className="label">Takes</span>
         <span className="dim" style={{ fontSize: 11 }}>
-          last 5 kept
+          last 5 kept · ★ keeps a take and uses it as the reference line
         </span>
       </div>
       {takes.length === 0 ? (
@@ -25,6 +25,17 @@ export function TakesList() {
       )}
     </section>
   );
+}
+
+function exportTake(take: TakeRecord) {
+  const url = URL.createObjectURL(take.wav);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `take-${take.number}.wav`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
 }
 
 function TakeCard({ take }: { take: TakeRecord }) {
@@ -52,13 +63,22 @@ function TakeCard({ take }: { take: TakeRecord }) {
     <div className={`card inner${isLoaded ? ' on' : ''}`} style={{ padding: 8, borderColor: isLoaded ? 'var(--accent)' : undefined }}>
       <div className="row between">
         <div className="row">
-          <span style={{ fontWeight: 700, fontSize: 13 }}>Take {take.number}</span>
+          <span style={{ fontWeight: 700, fontSize: 13 }}>
+            Take {take.number}
+            {take.starred && <span style={{ color: 'var(--accent)', marginLeft: 4 }}>★</span>}
+          </span>
           <span className="pill sm ghost mono">{formatTime(take.duration)}</span>
           <span className="dim" style={{ fontSize: 11 }}>
             {new Date(take.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
           </span>
         </div>
         <div className="row">
+          <button className={`chip sm${take.starred ? ' on' : ''}`} onClick={() => void st.toggleStar(take.id)} title="Star: keep this take and show it as the reference line while the track plays">
+            {take.starred ? '★' : '☆'}
+          </button>
+          <button className="chip sm" onClick={() => exportTake(take)} title="Save WAV">
+            ⤓
+          </button>
           <button className={`chip sm${loop ? ' on' : ''}`} onClick={() => setLoop((l) => !l)} title="Loop take">
             ∞
           </button>
