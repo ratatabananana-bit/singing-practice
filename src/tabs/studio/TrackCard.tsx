@@ -268,7 +268,7 @@ export function TrackCard() {
                 onClick={() => st.setMeta({ snapOn: !meta.snapOn })}
                 title={`Snap markers and sections to the beat (${meta.beatGrid.bpm} BPM detected)`}
               >
-                🧲 {Math.round(meta.beatGrid.bpm)}
+                <MagnetIcon /> {Math.round(meta.beatGrid.bpm)}
               </button>
             )}
             <button className={`btn sm${meta.loopOn ? ' primary' : ''}`} onClick={() => st.setLoopOn(!meta.loopOn)} disabled={sections === 0 && songSections.length === 0} title="Loop on / off">
@@ -442,6 +442,17 @@ export function TrackCard() {
     trackPlayer.setLoopGap(sec);
     st.setMeta({ loopGap: trackPlayer.state.loopGap });
   }
+}
+
+/** Monochrome magnet, same line style as the other tool glyphs. */
+function MagnetIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ marginRight: 2 }}>
+      <path d="M6 3v9a6 6 0 0 0 12 0V3" />
+      <path d="M6 3h4v9a2 2 0 0 0 4 0V3h4" />
+      <path d="M6 7h4M14 7h4" />
+    </svg>
+  );
 }
 
 function PctStep({ value, onChange, min = 25, max = 200 }: { value: number; onChange: (v: number) => void; min?: number; max?: number }) {
