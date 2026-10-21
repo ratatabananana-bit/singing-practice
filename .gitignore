@@ -1,9 +1,15 @@
 node_modules
 dist
 dev-dist
-android
+android/.gradle
+android/build
+android/app/build
+android/local.properties
+android/.idea
+android/app/src/main/assets/public
 ios
 *.log
 .DS_Store
 public/dev
 voice sample.mp3
+*.apk

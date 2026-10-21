@@ -43,16 +43,15 @@ npm run server      # http://localhost:5174, GET /api/yt?url=…
 
 The dev server proxies `/api` to it. From a phone, set Settings → YouTube helper to the PC address (http://<pc-ip>:5174). Downloading YouTube audio may be against YouTube's terms; use it for your own practice.
 
-### Mobile (Capacitor)
+### Android APK (Capacitor)
+
+The `android/` project is committed (mic permission and LAN http already set). Needs JDK 21 (Capacitor 8) and the Android SDK (`android/local.properties` → `sdk.dir`, forward slashes). On this PC JDK 21 lives in `%LOCALAPPDATA%\jdk-21` and is pinned via `~/.gradle/gradle.properties` (`org.gradle.java.home`).
 
 ```bash
-npm run build
-npx cap add android   # or ios (needs Android Studio / Xcode)
-npx cap sync
-npx cap open android
+npm run apk           # build web, sync into android/, gradle assembleDebug
 ```
 
-Add the microphone permission to the native project (`RECORD_AUDIO` on Android, `NSMicrophoneUsageDescription` on iOS).
+APK lands in `android/app/build/outputs/apk/debug/app-debug.apk`. Install with `adb install -r <apk>` or copy it to the phone. For YouTube import on the phone, set Settings → YouTube helper to `http://<pc-ip>:5174` while `npm run server` runs on the PC. iOS: `npx cap add ios` plus `NSMicrophoneUsageDescription` in Info.plist (needs Xcode).
 
 ### Dev helpers
 
