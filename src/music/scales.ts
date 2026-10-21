@@ -51,6 +51,15 @@ export const SCALE_BY_ID: Record<ScaleId, ScaleDef> = Object.fromEntries(SCALES.
   ScaleDef
 >;
 
+const DEGREE_BY_SEMITONE = ['1', '♭2', '2', '♭3', '3', '4', '♭5', '5', '♭6', '6', '♭7', '7'];
+
+/** Scale-degree label for a semitone offset from the root (relative to major): 1, ♭3, 5…; octave = 8. */
+export function degreeLabel(_scale: ScaleDef, interval: number): string {
+  if (interval === 12) return '8';
+  if (interval > 12) return `${degreeLabel(_scale, interval - 12)}'`;
+  return DEGREE_BY_SEMITONE[((interval % 12) + 12) % 12];
+}
+
 export type Direction = 'up' | 'down' | 'upDown';
 
 /** Build the MIDI sequence for an exercise at `root`. Up-down does not repeat the top note. */

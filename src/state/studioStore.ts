@@ -35,10 +35,23 @@ export interface StudioState {
 }
 
 let persistTimer: number | null = null;
+let pendingMeta: TrackMeta | null = null;
 function persistMeta(meta: TrackMeta) {
+  pendingMeta = meta;
   if (persistTimer) clearTimeout(persistTimer);
-  persistTimer = window.setTimeout(() => void storage.putMeta(meta), 300);
+  persistTimer = window.setTimeout(flushMeta, 300);
 }
+function flushMeta() {
+  if (persistTimer) clearTimeout(persistTimer);
+  persistTimer = null;
+  if (pendingMeta) {
+    void storage.putMeta(pendingMeta);
+    pendingMeta = null;
+  }
+}
+// Don't lose a pin dropped right before the app is closed or backgrounded.
+window.addEventListener('pagehide', flushMeta);
+document.addEventListener('visibilitychange', () => document.visibilityState === 'hidden' && flushMeta());
 
 function applyLoop(meta: TrackMeta) {
   const sorted = [...meta.bookmarks].sort((a, b) => a.time - b.time);

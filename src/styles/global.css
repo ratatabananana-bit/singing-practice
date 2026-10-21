@@ -176,6 +176,13 @@ button:disabled {
   font-family: var(--mono);
   font-variant-numeric: tabular-nums;
 }
+.clamp2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
 .divider {
   height: 1px;
   background: var(--border-soft);
@@ -197,6 +204,9 @@ button:disabled {
   white-space: nowrap;
   color: var(--text);
   line-height: 1;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .pill.sm {
   height: 22px;
@@ -245,6 +255,9 @@ button:disabled {
   font-weight: 600;
   color: var(--muted);
   white-space: nowrap;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .chip.on {
   background: var(--accent-dim);
@@ -382,6 +395,12 @@ button:disabled {
   border-radius: var(--radius-sm);
   background: #0a0a0c;
   border: 1px solid var(--border-soft);
+  touch-action: pan-x;
+  cursor: grab;
+  user-select: none;
+}
+.piano-wrap:active {
+  cursor: grabbing;
 }
 .piano-wrap::-webkit-scrollbar {
   display: none;

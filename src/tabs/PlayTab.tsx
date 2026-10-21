@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSettings, type AutoAdvance } from '../state/settings';
-import { SCALES, SCALE_BY_ID, buildSequence, isInScale, turnIndex, type Direction } from '../music/scales';
+import { SCALES, SCALE_BY_ID, buildSequence, degreeLabel, isInScale, turnIndex, type Direction } from '../music/scales';
 import { centsOff, noteLabel, noteName, octaveOf, clampMidi } from '../music/notes';
 import { Sequencer } from '../audio/sequencer';
 import { instrument } from '../audio/synth/Instrument';
@@ -27,19 +27,16 @@ export function PlayTab() {
   const latest = useRef(s);
   latest.current = s;
 
-  const startRun = useCallback(
-    (root: number) => {
-      const st = latest.current;
-      const sc = SCALE_BY_ID[st.playScale] ?? SCALES[0];
-      const seqNotes = buildSequence(root, sc, st.playDirection);
-      const sq = seqRef.current!;
-      sq.bpm = st.bpm;
-      sq.sound = st.sound;
-      setPlaying(true);
-      void sq.start(seqNotes, st.intro, root);
-    },
-    [],
-  );
+  const startRun = useCallback((root: number, keepTail = false) => {
+    const st = latest.current;
+    const sc = SCALE_BY_ID[st.playScale] ?? SCALES[0];
+    const seqNotes = buildSequence(root, sc, st.playDirection);
+    const sq = seqRef.current!;
+    sq.bpm = st.bpm;
+    sq.sound = st.sound;
+    setPlaying(true);
+    void sq.start(seqNotes, st.intro, root, keepTail);
+  }, []);
 
   if (!seqRef.current) {
     seqRef.current = new Sequencer({
@@ -57,7 +54,7 @@ export function PlayTab() {
         }
         const next = clampMidi(st.playRoot + (st.autoAdvance === 'up' ? 1 : -1), PIANO_LO, PIANO_HI - 12);
         useSettings.getState().set({ playRoot: next });
-        startRun(next);
+        startRun(next, true);
       },
       onStop: () => {
         setPlaying(false);
@@ -93,6 +90,10 @@ export function PlayTab() {
   };
 
   const soundingMidi = introMidi ?? (step >= 0 ? sequence[step] : null);
+  // Chips show the exercise once as scale degrees; on the way back the highlight walks backwards.
+  const chipNotes = s.playDirection === 'down' ? [...scale.exercise].reverse() : scale.exercise;
+  const chipRoot = s.playRoot;
+  const chipStep = step < 0 ? -1 : turn >= 0 && step > turn ? 2 * turn - step : step;
   const visibleScales = SCALES.filter((sc) => !s.hiddenScales.includes(sc.id));
   const inScale = useCallback((m: number) => isInScale(m, s.playRoot, scale), [s.playRoot, scale]);
 
@@ -133,9 +134,12 @@ export function PlayTab() {
           </button>
         </div>
         <div className="chips" style={{ marginTop: 6 }}>
-          {sequence.map((m, i) => (
-            <SeqChip key={i} midi={m} on={i === step} after={i === turn ? '↩' : null} />
+          {chipNotes.map((offset, i) => (
+            <span key={i} className={`chip sm${i === chipStep ? ' sounding' : ''}`} title={noteLabel(chipRoot + offset)}>
+              {degreeLabel(scale, offset)}
+            </span>
           ))}
+          {turn >= 0 && <span className={`chip sm${step > turn ? ' on' : ''}`}>↩</span>}
         </div>
         {introMidi !== null && (
           <div className="muted" style={{ fontSize: 11, marginTop: 6 }}>
@@ -171,15 +175,6 @@ export function PlayTab() {
           ))}
         </div>
       </section>
-    </>
-  );
-}
-
-function SeqChip({ midi, on, after }: { midi: number; on: boolean; after: string | null }) {
-  return (
-    <>
-      <span className={`chip sm${on ? ' sounding' : ''}`}>{noteLabel(midi)}</span>
-      {after && <span className="chip sm">{after}</span>}
     </>
   );
 }

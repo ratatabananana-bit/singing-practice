@@ -45,9 +45,12 @@ export class Sequencer {
     return 60 / this.bpm;
   }
 
-  /** Start a run: optional intro cue, then the sequence. */
-  async start(sequence: number[], intro: IntroMode, root: number): Promise<void> {
-    this.stop(false);
+  /**
+   * Start a run: optional intro cue, then the sequence.
+   * `keepTail` leaves the previous run's last note ringing (used when auto-advancing).
+   */
+  async start(sequence: number[], intro: IntroMode, root: number, keepTail = false): Promise<void> {
+    this.stop(false, !keepTail);
     await unlockAudio();
     const ctx = getAudioContext();
     this.sequence = sequence;
@@ -61,8 +64,8 @@ export class Sequencer {
     this.timer = window.setInterval(() => this.tick(), 25);
   }
 
-  /** Stop playback. */
-  stop(notify = true): void {
+  /** Stop playback. `cut` silences notes that are still ringing. */
+  stop(notify = true, cut = true): void {
     if (this.timer !== null) {
       clearInterval(this.timer);
       this.timer = null;
@@ -71,7 +74,7 @@ export class Sequencer {
     this.uiTimers = [];
     const was = this.running;
     this.running = false;
-    instrument.stopAll();
+    if (cut) instrument.stopAll();
     if (was && notify) this.events.onStop();
   }
 
@@ -112,17 +115,16 @@ export class Sequencer {
       this.pos++;
       return;
     }
-    // run finished: stop scheduling; notify when the last note ends
-    const endAt = this.nextTime;
+    // run finished: let the last note ring, then one rest beat before notifying
+    const lastNoteEnd = this.nextTime;
+    const endAt = lastNoteEnd + beat;
     this.running = false;
     if (this.timer !== null) {
       clearInterval(this.timer);
       this.timer = null;
     }
-    this.fireAt(endAt, () => {
-      this.events.onStep(-1, 0);
-      this.events.onRunEnd();
-    });
+    this.fireAt(lastNoteEnd, () => this.events.onStep(-1, 0));
+    this.fireAt(endAt, () => this.events.onRunEnd());
   }
 
   private emit(s: Scheduled, dur: number): void {

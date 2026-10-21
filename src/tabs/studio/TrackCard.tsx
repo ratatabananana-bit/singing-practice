@@ -48,9 +48,11 @@ export function TrackCard() {
         }}
       />
       <div className="row between">
-        <div className="row grow" style={{ minWidth: 0 }}>
-          <span className="label">Track</span>
-          <span className="grow" style={{ fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        <div className="row grow" style={{ minWidth: 0, alignItems: 'flex-start' }}>
+          <span className="label" style={{ lineHeight: '18px' }}>
+            Track
+          </span>
+          <span className="grow clamp2" style={{ fontSize: 13, fontWeight: 600, lineHeight: '18px' }}>
             {st.track ? st.track.name : <span className="dim">No track loaded</span>}
           </span>
         </div>
