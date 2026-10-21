@@ -46,7 +46,7 @@ export function RunView({ run, now, height = 120 }: { run: React.RefObject<RunSt
         g.fillStyle = '#5c5c66';
         g.font = '11px ui-monospace, monospace';
         g.textAlign = 'center';
-        g.fillText('Press play: targets appear here, your pitch draws over them', w / 2, h / 2 + 4);
+        g.fillText('Targets show here when you play', w / 2, h / 2 + 4);
         g.textAlign = 'left';
         return;
       }

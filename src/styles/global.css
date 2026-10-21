@@ -907,3 +907,90 @@ canvas.graph {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-dim);
 }
+
+/* ---- tap targets: interactive pills/chips/tools are 36–44 px, display-only ones stay compact ---- */
+button.pill,
+button.chip {
+  min-height: 36px;
+  padding-left: 12px;
+  padding-right: 12px;
+}
+button.pill.sm,
+button.chip.sm {
+  min-height: 36px;
+  font-size: 12px;
+}
+.tool {
+  width: 42px;
+  height: 40px;
+}
+.seg button {
+  min-height: 34px;
+  padding: 0 12px;
+}
+.chips {
+  gap: 8px;
+}
+.btn.sm {
+  min-height: 36px;
+}
+.icon-btn {
+  width: 42px;
+  height: 42px;
+}
+.tile-btn {
+  width: 36px;
+  height: 36px;
+}
+.timeline-pin {
+  width: 26px;
+  height: 26px;
+  margin-left: -13px;
+  font-size: 12px;
+}
+.timeline-pin::after {
+  top: 24px;
+}
+.timeline {
+  height: 48px;
+}
+.timeline-track,
+.timeline-loop {
+  top: 26px;
+}
+.timeline-head {
+  top: 20px;
+}
+.marker-chip {
+  min-height: 44px;
+  padding: 6px 10px;
+}
+/* horizontally scrolling option strip, one row, never wraps */
+.strip {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding: 2px 2px 4px;
+  margin: 0 -2px;
+  -webkit-overflow-scrolling: touch;
+}
+.strip::-webkit-scrollbar {
+  display: none;
+}
+.strip > * {
+  flex: none;
+}
+/* small display-only pill (status / result), never a button */
+span.pill.sm {
+  height: 24px;
+  font-size: 11px;
+}
+.list-item {
+  min-height: 44px;
+}
+.list-item .chip.sm {
+  min-height: 36px;
+  min-width: 36px;
+  justify-content: center;
+}

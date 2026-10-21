@@ -229,18 +229,9 @@ export function PlayTab() {
             </button>
           </div>
         </div>
-        <div className="row between wrap" style={{ marginTop: 12 }}>
+        <div className="row between" style={{ marginTop: 12 }}>
           <span className="label">Sequence</span>
-          <div className="row wrap" style={{ gap: 6, justifyContent: 'flex-end' }}>
-            <button className={`pill sm${s.playMode === 'listen' ? ' accent' : ' ghost'}`} onClick={() => s.set({ playMode: MODE_NEXT[s.playMode] })} title="Sing with the piano, or hear the run once then sing it with a click">
-              {MODE_LABEL[s.playMode]}
-            </button>
-            <RunOptionPills />
-            <RangePill />
-            <button className="pill sm ghost" onClick={() => s.set({ runGap: GAP_NEXT[s.runGap] })} title="Rest between runs">
-              {GAP_LABEL[s.runGap]}
-            </button>
-          </div>
+          <SingTarget target={soundingMidi} />
         </div>
         <div className="chips" style={{ marginTop: 6 }}>
           {chipNotes.map((offset, i) => (
@@ -250,13 +241,10 @@ export function PlayTab() {
           ))}
           {turn >= 0 && <span className={`chip sm${step > turn ? ' on' : ''}`}>↩</span>}
         </div>
-        <div className="row between" style={{ marginTop: 8 }}>
-          <span className="dim" style={{ fontSize: 11 }}>
-            {listening ? 'Listen…' : scale.pattern ? scale.short : degreeString(scale)}
-            {!listening && turn >= 0 ? ' and back' : ''}
-            {!listening && (scale.holdBeats ?? 1) > 1 ? ` · ${scale.holdBeats} beats per note, slide between` : ''}
-          </span>
-          <SingTarget target={soundingMidi} />
+        <div className="dim" style={{ fontSize: 11, marginTop: 6 }}>
+          {listening ? 'Listen…' : scale.pattern ? scale.short : degreeString(scale)}
+          {!listening && turn >= 0 ? ' and back' : ''}
+          {!listening && (scale.holdBeats ?? 1) > 1 ? ` · ${scale.holdBeats} beats per note, slide between` : ''}
         </div>
         <div style={{ marginTop: 8 }}>
           <RunView run={runRef} now={now} height={120} />
@@ -287,6 +275,17 @@ export function PlayTab() {
           </div>
         )}
       </section>
+
+      <div className="strip">
+        <RunOptionPills />
+        <RangePill />
+        <button className={`pill sm${s.playMode === 'listen' ? ' accent' : ' ghost'}`} onClick={() => s.set({ playMode: MODE_NEXT[s.playMode] })} title="Sing with the piano, or hear the run once then sing it with a click">
+          {MODE_LABEL[s.playMode]}
+        </button>
+        <button className="pill sm ghost" onClick={() => s.set({ runGap: GAP_NEXT[s.runGap] })} title="Rest between runs">
+          {GAP_LABEL[s.runGap]}
+        </button>
+      </div>
 
       <Piano root={s.playRoot} inScale={inScale} sounding={soundingMidi} onKey={onKey} />
 

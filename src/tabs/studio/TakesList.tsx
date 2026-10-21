@@ -11,7 +11,7 @@ export function TakesList() {
       <div className="row between">
         <span className="label">Takes</span>
         <span className="dim" style={{ fontSize: 11 }}>
-          last 5 kept · ★ keeps a take and uses it as the reference line
+          last 5 kept · ★ = keep + reference line
         </span>
       </div>
       {takes.length === 0 ? (
@@ -63,7 +63,7 @@ function TakeCard({ take }: { take: TakeRecord }) {
     <div className={`card inner${isLoaded ? ' on' : ''}`} style={{ padding: 8, borderColor: isLoaded ? 'var(--accent)' : undefined }}>
       <div className="row between">
         <div className="row">
-          <span style={{ fontWeight: 700, fontSize: 13 }}>
+          <span style={{ fontWeight: 700, fontSize: 13, whiteSpace: 'nowrap' }}>
             Take {take.number}
             {take.starred && <span style={{ color: 'var(--accent)', marginLeft: 4 }}>★</span>}
           </span>
@@ -72,28 +72,28 @@ function TakeCard({ take }: { take: TakeRecord }) {
             {new Date(take.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
           </span>
         </div>
-        <div className="row">
-          <button className={`chip sm${take.starred ? ' on' : ''}`} onClick={() => void st.toggleStar(take.id)} title="Star: keep this take and show it as the reference line while the track plays">
-            {take.starred ? '★' : '☆'}
-          </button>
-          <button className="chip sm" onClick={() => exportTake(take)} title="Save WAV">
-            ⤓
-          </button>
-          <button className={`chip sm${loop ? ' on' : ''}`} onClick={() => setLoop((l) => !l)} title="Loop take">
-            ∞
-          </button>
-          <button className="chip sm" style={{ color: 'var(--bad)' }} onClick={() => void st.deleteTake(take.id)} title="Delete">
-            ✕
-          </button>
-        </div>
       </div>
       <div className="row" style={{ marginTop: 6 }}>
-        <button className={`btn round${playing ? '' : ' primary'}`} style={{ width: 38, height: 38 }} onClick={() => void toggle()} aria-label={playing ? 'Pause' : 'Play'}>
+        <button className={`btn round${playing ? '' : ' primary'}`} style={{ width: 44, height: 44 }} onClick={() => void toggle()} aria-label={playing ? 'Pause' : 'Play'}>
           {playing ? '❚❚' : '▶'}
         </button>
         <div className="grow">
-          <Waveform summary={take.wave} progress={progress} onSeek={(f) => void seek(f)} />
+          <Waveform summary={take.wave} progress={progress} onSeek={(f) => void seek(f)} height={56} />
         </div>
+      </div>
+      <div className="row" style={{ marginTop: 6, justifyContent: 'flex-end' }}>
+          <button className={`tool${take.starred ? ' on' : ''}`} onClick={() => void st.toggleStar(take.id)} title="Star: keep this take and show it as the reference line while the track plays" style={{ width: 38, height: 36 }}>
+            {take.starred ? '★' : '☆'}
+          </button>
+          <button className="tool" onClick={() => exportTake(take)} title="Save WAV" style={{ width: 38, height: 36 }}>
+            ⤓
+          </button>
+          <button className={`tool${loop ? ' on' : ''}`} onClick={() => setLoop((l) => !l)} title="Loop take" style={{ width: 38, height: 36 }}>
+            ∞
+          </button>
+          <button className="tool" style={{ width: 38, height: 36, color: 'var(--bad)' }} onClick={() => void st.deleteTake(take.id)} title="Delete">
+            ✕
+          </button>
       </div>
     </div>
   );

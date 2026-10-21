@@ -388,7 +388,7 @@ function StepTile({
       </div>
       <div className="row" style={{ justifyContent: 'center', gap: 6, marginTop: 2 }}>
         <span className="label">{label}</span>
-        <button className="tile-expand" onClick={() => onBig(true)} title="Expand" aria-label={`Expand ${label}`}>
+        <button className="tile-expand" onClick={() => onBig(true)} title="Expand" aria-label={`Expand ${label}`} style={{ width: 28, height: 28 }}>
           ⤢
         </button>
       </div>

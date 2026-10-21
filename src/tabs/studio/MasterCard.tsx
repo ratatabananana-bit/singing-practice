@@ -12,7 +12,6 @@ import { trackPlayer } from '../../audio/player/TrackPlayer';
 import { instrument } from '../../audio/synth/Instrument';
 import { LoudnessMeter } from '../../components/LoudnessMeter';
 import { NoteSlots } from '../../components/NoteSlots';
-import { Switch } from '../../components/Switch';
 import { useDisplayNote, useMicState } from '../../state/pitchStore';
 import { usePitchSelector } from '../../state/pitchStore';
 import { uid } from '../../storage/db';
@@ -127,11 +126,17 @@ export function MasterCard() {
             </div>
           </div>
         </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-end' }}>
-          <Switch on={settings.countIn} onChange={(v) => settings.set({ countIn: v })} label="Count-in" />
-          <Switch on={settings.autoPlayLastTake} onChange={(v) => settings.set({ autoPlayLastTake: v })} label="Auto-play last take" />
-          <Switch on={settings.denoise} onChange={(v) => settings.set({ denoise: v })} label="Denoise" />
-        </div>
+      </div>
+      <div className="strip" style={{ marginTop: 10 }}>
+        <button className={`pill sm${settings.countIn ? ' accent' : ' ghost'}`} onClick={() => settings.set({ countIn: !settings.countIn })} title="Four clicks before recording">
+          Count-in {settings.countIn ? 'on' : 'off'}
+        </button>
+        <button className={`pill sm${settings.autoPlayLastTake ? ' accent' : ' ghost'}`} onClick={() => settings.set({ autoPlayLastTake: !settings.autoPlayLastTake })}>
+          Auto-play take {settings.autoPlayLastTake ? 'on' : 'off'}
+        </button>
+        <button className={`pill sm${settings.denoise ? ' accent' : ' ghost'}`} onClick={() => settings.set({ denoise: !settings.denoise })} title="Clean background noise after recording">
+          Denoise {settings.denoise ? 'on' : 'off'}
+        </button>
       </div>
     </section>
   );

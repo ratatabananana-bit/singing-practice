@@ -58,13 +58,17 @@ let dbp: Promise<IDBPDatabase<SingDB>> | null = null;
 
 function db(): Promise<IDBPDatabase<SingDB>> {
   if (!dbp) {
-    dbp = openDB<SingDB>('singing-practice', 1, {
-      upgrade(d) {
-        const t = d.createObjectStore('tracks', { keyPath: 'id' });
-        t.createIndex('addedAt', 'addedAt');
-        d.createObjectStore('trackMeta', { keyPath: 'trackId' });
-        const k = d.createObjectStore('takes', { keyPath: 'id' });
-        k.createIndex('createdAt', 'createdAt');
+    dbp = openDB<SingDB>('singing-practice', 3, {
+      upgrade(d, oldVersion) {
+        if (oldVersion < 1) {
+          const t = d.createObjectStore('tracks', { keyPath: 'id' });
+          t.createIndex('addedAt', 'addedAt');
+          d.createObjectStore('trackMeta', { keyPath: 'trackId' });
+          const k = d.createObjectStore('takes', { keyPath: 'id' });
+          k.createIndex('createdAt', 'createdAt');
+        }
+        // v2 briefly added a "runs" store (practice history, since removed); drop it if present.
+        if (oldVersion < 3 && d.objectStoreNames.contains('runs' as never)) d.deleteObjectStore('runs' as never);
       },
     });
   }

@@ -104,7 +104,7 @@ export function TuneTab() {
         onNext={scaleMode ? advance : undefined}
       />
 
-      <div className="row between">
+      <div className="strip">
         <div className="seg">
           <button className={!scaleMode ? 'on' : ''} onClick={() => s.set({ tuneMode: 'note' })}>
             One Note
@@ -114,10 +114,10 @@ export function TuneTab() {
           </button>
         </div>
         {scaleMode && (
-          <div className="row" style={{ gap: 6 }}>
+          <>
             <RunOptionPills />
             <RangePill />
-          </div>
+          </>
         )}
       </div>
 
@@ -334,11 +334,11 @@ function TunerCard({
             {midiToFreq(target).toFixed(1)} Hz
           </div>
           <div className="row" style={{ marginTop: 8, gap: 6 }}>
-            <button className="btn sm" onClick={onPlay}>
+            <button className="btn" onClick={onPlay} style={{ minHeight: 40 }}>
               ▶ Play
             </button>
             {onNext && (
-              <button className="btn sm" onClick={onNext} title="Skip to the next note">
+              <button className="btn" onClick={onNext} title="Skip to the next note" style={{ minHeight: 40 }}>
                 Next ›
               </button>
             )}

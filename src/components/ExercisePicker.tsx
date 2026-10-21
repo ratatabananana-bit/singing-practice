@@ -12,14 +12,14 @@ export function RunOptionPills() {
   const autoAdvance = useSettings((x) => x.autoAdvance);
   const set = useSettings((x) => x.set);
   return (
-    <div className="row" style={{ gap: 6 }}>
+    <>
       <button className={`pill sm${intro !== 'off' ? ' accent' : ' ghost'}`} onClick={() => set({ intro: INTRO_NEXT[intro] })} title="Key cue played before each run">
         {INTRO_LABEL[intro]}
       </button>
       <button className={`pill sm${autoAdvance !== 'off' ? ' accent' : ' ghost'}`} onClick={() => set({ autoAdvance: ADVANCE_NEXT[autoAdvance] })}>
         {ADVANCE_LABEL[autoAdvance]}
       </button>
-    </div>
+    </>
   );
 }
 
@@ -55,7 +55,7 @@ export function ExercisePicker() {
           </div>
         )}
       </div>
-      <div className="chips" style={{ marginTop: 8 }}>
+      <div className="strip" style={{ marginTop: 8 }}>
         {visible
           .filter((sc) => !sc.pattern)
           .map((sc) => (
@@ -67,7 +67,7 @@ export function ExercisePicker() {
           <div className="label" style={{ marginTop: 12 }}>
             Patterns
           </div>
-          <div className="chips" style={{ marginTop: 6 }}>
+          <div className="strip" style={{ marginTop: 6 }}>
             {visible
               .filter((sc) => sc.pattern)
               .map((sc) => (
@@ -83,7 +83,7 @@ export function ExercisePicker() {
 /** Chip: name plus the degree pattern (1 2 3 4 5) so it matches how exercises are described online. */
 function ExerciseChip({ sc, on, onClick }: { sc: ScaleDef; on: boolean; onClick: () => void }) {
   return (
-    <button className={`chip${on ? ' on' : ''}`} onClick={onClick} style={{ height: 'auto', padding: '5px 10px', flexDirection: 'column', gap: 1, alignItems: 'flex-start' }}>
+    <button className={`chip${on ? ' on' : ''}`} onClick={onClick} style={{ height: 'auto', minHeight: 44, padding: '6px 12px', flexDirection: 'column', gap: 2, alignItems: 'flex-start', justifyContent: 'center' }}>
       <span style={{ fontSize: 12 }}>{sc.pattern ? sc.short : sc.name}</span>
       <span className="mono" style={{ fontSize: 10, opacity: 0.75, fontWeight: 500 }}>
         {sc.pattern ? sc.name : degreeString(sc)}
