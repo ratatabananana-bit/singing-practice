@@ -7,6 +7,9 @@ export type SoundMode = 'piano' | 'vocal' | 'flute';
 export type IntroMode = 'off' | '15' | '135';
 export type AutoAdvance = 'off' | 'up' | 'down';
 export type TuneMode = 'note' | 'scale';
+export type RangeEdge = 'turn' | 'stop' | 'continue';
+export type PlayMode = 'along' | 'listen';
+export type RunGap = 'none' | 'beat' | 'bar';
 
 export interface PitchDebug {
   enabled: boolean;
@@ -52,7 +55,15 @@ export interface SettingsState {
   pitch: PitchDebug;
   autoPlayLastTake: boolean;
   denoise: boolean;
+  /** "In tune" tolerance in cents (Tune tab); the Play pill allows 10 more. */
+  toleranceCents: number;
+  /** Vocal range limits (MIDI) used by auto-advance; null = unlimited. */
+  rangeLow: number | null;
+  rangeHigh: number | null;
+  rangeEdge: RangeEdge;
   // Play tab
+  playMode: PlayMode;
+  runGap: RunGap;
   playRoot: number;
   playScale: ScaleId;
   playDirection: Direction;
@@ -86,6 +97,12 @@ export const useSettings = create<SettingsState>()(
       pitch: { ...DEFAULT_PITCH_DEBUG },
       autoPlayLastTake: true,
       denoise: false,
+      toleranceCents: 20,
+      rangeLow: null,
+      rangeHigh: null,
+      rangeEdge: 'turn',
+      playMode: 'along',
+      runGap: 'beat',
       playRoot: 60,
       playScale: 'major',
       playDirection: 'upDown',

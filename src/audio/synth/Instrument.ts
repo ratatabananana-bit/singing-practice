@@ -120,6 +120,22 @@ class Instrument {
     return this.playFlute(midi, duration, t0, velocity);
   }
 
+  /** Short metronome click (used for count-ins and listen-then-sing passes). */
+  click(when?: number, accent = false): void {
+    const ctx = getAudioContext();
+    const t0 = when ?? ctx.currentTime;
+    const osc = ctx.createOscillator();
+    osc.type = 'square';
+    osc.frequency.value = accent ? 1600 : 1100;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0, t0);
+    g.gain.linearRampToValueAtTime(accent ? 0.5 : 0.35, t0 + 0.002);
+    g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.045);
+    osc.connect(g).connect(this.out());
+    osc.start(t0);
+    osc.stop(t0 + 0.06);
+  }
+
   stopAll(): void {
     const now = getAudioContext().currentTime;
     for (const v of this.active) v.stop(now);

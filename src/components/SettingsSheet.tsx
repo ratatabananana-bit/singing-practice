@@ -89,6 +89,8 @@ export function SettingsSheet({ onClose }: { onClose: () => void }) {
 
           <div className="setting">
             <div className="title">Tuner</div>
+            <Slider label="In-tune tolerance" value={s.toleranceCents} min={5} max={30} step={5} unit="¢" onChange={(v) => s.set({ toleranceCents: v })} />
+            <div className="desc">Tune tab counts a note in tune within this; the Play tab pill allows 10¢ more. Most tuner apps default to 10–20¢.</div>
             <Slider label="Hold duration" value={s.holdSeconds} min={0.5} max={5} step={0.1} unit="s" onChange={(v) => s.set({ holdSeconds: v })} />
             <Slider label="Silence gate" value={s.silenceDb} min={-80} max={-20} step={1} unit="dB" onChange={(v) => s.set({ silenceDb: v })} />
             <div className="desc">Below the gate, input counts as silence everywhere (tuner, graphs, takes).</div>
