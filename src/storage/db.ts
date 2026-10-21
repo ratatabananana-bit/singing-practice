@@ -18,8 +18,10 @@ export interface TrackRecord {
 export interface TrackMeta {
   trackId: string;
   bookmarks: Bookmark[];
-  /** Index of the bookmark that starts the active loop section, or null. */
+  /** Index (in time order) of the marker that starts the loop, or null. */
   activeLoop: number | null;
+  /** Index of the marker that ends the loop; defaults to activeLoop + 1 when missing. */
+  loopEnd?: number | null;
   loopOn: boolean;
   speed: number;
   transpose: number;

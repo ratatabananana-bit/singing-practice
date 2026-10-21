@@ -3,6 +3,7 @@ import { storage, uid, type Bookmark, type TakeRecord, type TrackMeta } from '..
 import { trackPlayer, TrackPlayer } from '../audio/player/TrackPlayer';
 import { useSettings } from './settings';
 import { instrument } from '../audio/synth/Instrument';
+import * as pitchHistory from './pitchHistory';
 
 /** Second player instance for takes (so a take can play over / instead of the track). */
 export const takePlayer = new TrackPlayer();
@@ -29,6 +30,8 @@ export interface StudioState {
   /** Cycle the active loop: section 0 → 1 → … → off. */
   cycleLoop: () => void;
   setActiveLoop: (index: number | null) => void;
+  /** Loop between any two markers (time-order indices). */
+  setLoopRange: (a: number, b: number) => void;
   setLoopOn: (on: boolean) => void;
   refreshTakes: () => Promise<void>;
   addTake: (take: TakeRecord) => Promise<void>;
@@ -58,11 +61,20 @@ window.addEventListener('pagehide', flushMeta);
 window.addEventListener('beforeunload', flushMeta);
 document.addEventListener('visibilitychange', () => document.visibilityState === 'hidden' && flushMeta());
 
+/** Active loop as [startIndex, endIndex] in time order, or [null, null]. */
+export function loopPair(meta: TrackMeta): [number | null, number | null] {
+  const a = meta.activeLoop;
+  if (a === null || a < 0) return [null, null];
+  const b = meta.loopEnd ?? a + 1;
+  if (b <= a || b >= meta.bookmarks.length) return [null, null];
+  return [a, b];
+}
+
 function applyLoop(meta: TrackMeta) {
   const sorted = [...meta.bookmarks].sort((a, b) => a.time - b.time);
-  const i = meta.activeLoop;
-  if (meta.loopOn && i !== null && i >= 0 && i + 1 < sorted.length) {
-    trackPlayer.setLoop(true, sorted[i].time, sorted[i + 1].time);
+  const [i, j] = loopPair(meta);
+  if (meta.loopOn && i !== null && j !== null && j < sorted.length) {
+    trackPlayer.setLoop(true, sorted[i].time, sorted[j].time);
   } else {
     trackPlayer.setLoop(false, 0, 0);
   }
@@ -152,7 +164,7 @@ export const useStudio = create<StudioState>()((set, get) => ({
   removeBookmark(id) {
     const meta = get().meta;
     if (!meta) return;
-    const next = { ...meta, bookmarks: meta.bookmarks.filter((b) => b.id !== id), activeLoop: null, loopOn: false };
+    const next = { ...meta, bookmarks: meta.bookmarks.filter((b) => b.id !== id), activeLoop: null, loopEnd: null, loopOn: false };
     set({ meta: next });
     persistMeta(next);
     applyLoop(next);
@@ -165,7 +177,7 @@ export const useStudio = create<StudioState>()((set, get) => ({
   clearBookmarks() {
     const meta = get().meta;
     if (!meta) return;
-    const next = { ...meta, bookmarks: [], activeLoop: null, loopOn: false };
+    const next = { ...meta, bookmarks: [], activeLoop: null, loopEnd: null, loopOn: false };
     set({ meta: next });
     persistMeta(next);
     applyLoop(next);
@@ -175,7 +187,8 @@ export const useStudio = create<StudioState>()((set, get) => ({
     if (!meta) return;
     const sections = Math.max(0, meta.bookmarks.length - 1);
     if (sections === 0) return;
-    const cur = meta.loopOn && meta.activeLoop !== null ? meta.activeLoop : -1;
+    const [curA] = loopPair(meta);
+    const cur = meta.loopOn && curA !== null ? curA : -1;
     const nextIdx = cur + 1 < sections ? cur + 1 : null;
     if (nextIdx === null) get().setLoopOn(false);
     else get().setActiveLoop(nextIdx);
@@ -183,7 +196,7 @@ export const useStudio = create<StudioState>()((set, get) => ({
   setActiveLoop(index) {
     const meta = get().meta;
     if (!meta) return;
-    const next = { ...meta, activeLoop: index, loopOn: index !== null ? true : meta.loopOn };
+    const next = { ...meta, activeLoop: index, loopEnd: index !== null ? index + 1 : null, loopOn: index !== null ? true : meta.loopOn };
     set({ meta: next });
     persistMeta(next);
     applyLoop(next);
@@ -191,6 +204,19 @@ export const useStudio = create<StudioState>()((set, get) => ({
       const sorted = [...next.bookmarks].sort((a, b) => a.time - b.time);
       if (sorted[index]) trackPlayer.seek(sorted[index].time);
     }
+  },
+  setLoopRange(a, b) {
+    const meta = get().meta;
+    if (!meta) return;
+    const lo = Math.min(a, b);
+    const hi = Math.max(a, b);
+    if (lo === hi) return;
+    const next = { ...meta, activeLoop: lo, loopEnd: hi, loopOn: true };
+    set({ meta: next });
+    persistMeta(next);
+    applyLoop(next);
+    const sorted = [...next.bookmarks].sort((x, y) => x.time - y.time);
+    if (sorted[lo]) trackPlayer.seek(sorted[lo].time);
   },
   setLoopOn(on) {
     const meta = get().meta;
@@ -254,5 +280,5 @@ void useStudio.getState().refreshTakes();
 
 // Dev hooks for driving the app from the console / automated checks.
 if (import.meta.env.DEV) {
-  (window as unknown as { __dev: unknown }).__dev = { useStudio, trackPlayer, takePlayer, useSettings, instrument };
+  (window as unknown as { __dev: unknown }).__dev = { useStudio, trackPlayer, takePlayer, useSettings, instrument, pitchHistory };
 }

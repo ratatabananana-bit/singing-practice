@@ -194,18 +194,45 @@ interface FakeMic {
   freq: number;
   setFreq: (hz: number) => void;
   setLevel: (v: number) => void;
+  source?: AudioBufferSourceNode;
+  duration?: number;
 }
 declare global {
   interface Window {
     __fakemic?: FakeMic;
   }
 }
-function fakeMicConfig(): number | null {
+/** `?fakemic=220` (oscillator) or `?fakemic=file:/dev/voice.mp3` (looping audio file). */
+function fakeMicConfig(): number | string | null {
   if (typeof location === 'undefined') return null;
-  const m = /[?&]fakemic=([\d.]+)/.exec(location.search);
-  return m ? parseFloat(m[1]) : null;
+  const m = /[?&]fakemic=([^&]+)/.exec(location.search);
+  if (!m) return null;
+  const v = decodeURIComponent(m[1]);
+  if (v.startsWith('file:')) return v.slice(5);
+  const hz = parseFloat(v);
+  return Number.isFinite(hz) ? hz : null;
 }
-function createFakeMic(ctx: AudioContext, freq: number): AudioNode {
+function createFakeMic(ctx: AudioContext, cfg: number | string): AudioNode {
+  if (typeof cfg === 'string') return createFileMic(ctx, cfg);
+  return createOscMic(ctx, cfg);
+}
+function createFileMic(ctx: AudioContext, url: string): AudioNode {
+  const g = ctx.createGain();
+  g.gain.value = 1;
+  void fetch(url)
+    .then((r) => r.arrayBuffer())
+    .then((ab) => ctx.decodeAudioData(ab))
+    .then((buf) => {
+      const src = ctx.createBufferSource();
+      src.buffer = buf;
+      src.loop = true;
+      src.connect(g);
+      src.start();
+      window.__fakemic = { freq: 0, setFreq: () => {}, setLevel: (v) => g.gain.setTargetAtTime(v, ctx.currentTime, 0.02), source: src, duration: buf.duration };
+    });
+  return g;
+}
+function createOscMic(ctx: AudioContext, freq: number): AudioNode {
   const osc = ctx.createOscillator();
   osc.type = 'sawtooth';
   osc.frequency.value = freq;

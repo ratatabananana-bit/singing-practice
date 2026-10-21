@@ -96,7 +96,7 @@ export function rmsDb(buf: Float32Array): number {
   let s = 0;
   for (let i = 0; i < buf.length; i++) s += buf[i] * buf[i];
   const rms = Math.sqrt(s / buf.length);
-  return rms > 0 ? 20 * Math.log10(rms) : -120;
+  return rms > 0 ? Math.max(-120, 20 * Math.log10(rms)) : -120;
 }
 
 export function peakAbs(buf: Float32Array): number {

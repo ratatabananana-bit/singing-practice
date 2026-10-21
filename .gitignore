@@ -6,3 +6,4 @@ ios
 *.log
 .DS_Store
 public/dev
+voice sample.mp3

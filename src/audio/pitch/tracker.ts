@@ -87,11 +87,41 @@ export class VoicingTracker {
     const good = loud && periodic && clarityOk;
 
     if (good) {
-      this.voiced = true;
+      if (!this.voiced) {
+        // Onset confirmation: the first frame of a note is often a sub-octave / harmonic
+        // error, so a note starts only once two consecutive frames agree (±1 semitone).
+        if (this.onsetFreq > 0 && semitonesApart(raw.freq, this.onsetFreq) <= 1) {
+          this.voiced = true;
+          this.hold = p.holdFrames;
+          this.onsetFreq = 0;
+          this.jumpCandidate = 0;
+          const f = p.median ? this.med.push(raw.freq) : raw.freq;
+          return { freq: f, voiced: true };
+        }
+        this.onsetFreq = raw.freq;
+        return { freq: 0, voiced: false };
+      }
+      // Leap guard: a jump of more than 7 semitones between consecutive frames is held
+      // for one frame; it is accepted only if the next frame lands near the same pitch.
+      const last = this.lastFreq();
+      if (last > 0 && semitonesApart(raw.freq, last) > 7) {
+        if (this.jumpCandidate > 0 && semitonesApart(raw.freq, this.jumpCandidate) <= 1) {
+          this.jumpCandidate = 0;
+          this.med.reset();
+          const f = p.median ? this.med.push(raw.freq) : raw.freq;
+          this.hold = p.holdFrames;
+          return { freq: f, voiced: true };
+        }
+        this.jumpCandidate = raw.freq;
+        return { freq: last, voiced: true };
+      }
+      this.jumpCandidate = 0;
       this.hold = p.holdFrames;
       const f = p.median ? this.med.push(raw.freq) : raw.freq;
       return { freq: f, voiced: true };
     }
+    this.onsetFreq = 0;
+    this.jumpCandidate = 0;
     if (this.voiced && this.hold > 0 && loud) {
       // Brief dropout mid-note: keep the note alive for a couple of frames.
       this.hold--;
@@ -103,6 +133,9 @@ export class VoicingTracker {
     this.med.reset();
     return { freq: 0, voiced: false };
   }
+
+  private onsetFreq = 0;
+  private jumpCandidate = 0;
 
   private lastValue = 0;
   private lastFreq(): number {
@@ -116,6 +149,12 @@ export class VoicingTracker {
     this.voiced = false;
     this.hold = 0;
     this.lastValue = 0;
+    this.onsetFreq = 0;
+    this.jumpCandidate = 0;
     this.med.reset();
   }
+}
+
+function semitonesApart(a: number, b: number): number {
+  return Math.abs(12 * Math.log2(a / b));
 }

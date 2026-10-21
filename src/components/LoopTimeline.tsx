@@ -8,7 +8,9 @@ import type { Bookmark } from '../storage/db';
 export function LoopTimeline({
   duration,
   markers,
-  activeLoop,
+  loopA,
+  loopB,
+  pending,
   loopOn,
   position,
   onSeek,
@@ -18,7 +20,10 @@ export function LoopTimeline({
   duration: number;
   /** Sorted by time. */
   markers: Bookmark[];
-  activeLoop: number | null;
+  loopA: number | null;
+  loopB: number | null;
+  /** Marker index tapped as the start of a new range, waiting for the end marker. */
+  pending: number | null;
   loopOn: boolean;
   /** Current position in seconds (called every frame). */
   position: () => number;
@@ -46,8 +51,8 @@ export function LoopTimeline({
   };
   const pct = (sec: number) => (duration > 0 ? (sec / duration) * 100 : 0);
 
-  const a = activeLoop !== null ? markers[activeLoop] : undefined;
-  const b = activeLoop !== null ? markers[activeLoop + 1] : undefined;
+  const a = loopA !== null ? markers[loopA] : undefined;
+  const b = loopB !== null ? markers[loopB] : undefined;
 
   return (
     <div
@@ -79,7 +84,7 @@ export function LoopTimeline({
       {markers.map((m, i) => (
         <button
           key={m.id}
-          className={`timeline-pin${activeLoop !== null && (i === activeLoop || i === activeLoop + 1) ? ' on' : ''}`}
+          className={`timeline-pin${i === loopA || i === loopB ? ' on' : ''}${i === pending ? ' pending' : ''}`}
           style={{ left: `${pct(m.time)}%` }}
           onPointerDown={(e) => {
             e.stopPropagation();

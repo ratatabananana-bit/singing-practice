@@ -74,25 +74,49 @@ describe('median', () => {
 });
 
 describe('VoicingTracker hysteresis', () => {
+  const P = { clarityOn: 0.9, clarityOff: 0.7, silenceDb: -50, holdFrames: 0, median: false, minFreq: 55, maxFreq: 1200 };
+  const run = (t: VoicingTracker, f: { freq: number; clarity: number; db: number }) => {
+    const r = t.process(f);
+    t.remember(r.freq);
+    return r;
+  };
   it('needs high clarity to start, lower to stay', () => {
-    const t = new VoicingTracker({ clarityOn: 0.9, clarityOff: 0.7, silenceDb: -50, holdFrames: 0, median: false, minFreq: 55, maxFreq: 1200 });
-    expect(t.process({ freq: 220, clarity: 0.8, db: -20 }).voiced).toBe(false);
-    expect(t.process({ freq: 220, clarity: 0.95, db: -20 }).voiced).toBe(true);
-    expect(t.process({ freq: 220, clarity: 0.8, db: -20 }).voiced).toBe(true);
-    expect(t.process({ freq: 220, clarity: 0.6, db: -20 }).voiced).toBe(false);
+    const t = new VoicingTracker({ ...P });
+    expect(run(t, { freq: 220, clarity: 0.8, db: -20 }).voiced).toBe(false);
+    expect(run(t, { freq: 220, clarity: 0.95, db: -20 }).voiced).toBe(false); // onset frame 1
+    expect(run(t, { freq: 220, clarity: 0.95, db: -20 }).voiced).toBe(true); // confirmed
+    expect(run(t, { freq: 220, clarity: 0.8, db: -20 }).voiced).toBe(true);
+    expect(run(t, { freq: 220, clarity: 0.6, db: -20 }).voiced).toBe(false);
   });
   it('silence gate wins', () => {
     const t = new VoicingTracker();
-    expect(t.process({ freq: 220, clarity: 0.99, db: -60 }).voiced).toBe(false);
+    expect(run(t, { freq: 220, clarity: 0.99, db: -60 }).voiced).toBe(false);
+  });
+  it('a sub-octave first frame at onset is dropped', () => {
+    const t = new VoicingTracker({ ...P });
+    expect(run(t, { freq: 110, clarity: 0.95, db: -20 }).voiced).toBe(false);
+    expect(run(t, { freq: 220, clarity: 0.95, db: -20 }).voiced).toBe(false); // disagrees → restart onset
+    const r = run(t, { freq: 221, clarity: 0.95, db: -20 });
+    expect(r.voiced).toBe(true);
+    expect(r.freq).toBe(221);
   });
   it('hold frames bridge a one-frame dropout', () => {
-    const t = new VoicingTracker({ clarityOn: 0.9, clarityOff: 0.7, silenceDb: -50, holdFrames: 1, median: false, minFreq: 55, maxFreq: 1200 });
-    const a = t.process({ freq: 220, clarity: 0.95, db: -20 });
-    t.remember(a.freq);
-    const b = t.process({ freq: 0, clarity: 0.2, db: -20 });
+    const t = new VoicingTracker({ ...P, holdFrames: 1 });
+    run(t, { freq: 220, clarity: 0.95, db: -20 });
+    run(t, { freq: 220, clarity: 0.95, db: -20 });
+    const b = run(t, { freq: 0, clarity: 0.2, db: -20 });
     expect(b.voiced).toBe(true);
     expect(b.freq).toBe(220);
-    const c = t.process({ freq: 0, clarity: 0.2, db: -20 });
+    const c = run(t, { freq: 0, clarity: 0.2, db: -20 });
     expect(c.voiced).toBe(false);
+  });
+  it('a single-frame octave glitch mid-note is held, a real leap is accepted next frame', () => {
+    const t = new VoicingTracker({ ...P });
+    run(t, { freq: 220, clarity: 0.95, db: -20 });
+    run(t, { freq: 220, clarity: 0.95, db: -20 });
+    expect(run(t, { freq: 110, clarity: 0.95, db: -20 }).freq).toBe(220); // glitch held
+    expect(run(t, { freq: 220, clarity: 0.95, db: -20 }).freq).toBe(220);
+    expect(run(t, { freq: 440, clarity: 0.95, db: -20 }).freq).toBe(220); // leap: wait one frame
+    expect(run(t, { freq: 442, clarity: 0.95, db: -20 }).freq).toBe(442); // confirmed leap
   });
 });

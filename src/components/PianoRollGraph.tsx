@@ -20,7 +20,8 @@ export interface PianoRollProps {
   height?: number;
 }
 
-const ROWS_EACH_SIDE = 7;
+const ROWS_EACH_SIDE = 9;
+const CENTER_WINDOW_SEC = 4;
 const HELD_MIN_SEC = 0.35;
 const TIMELINE_H = 16;
 const LABEL_W = 34;
@@ -77,15 +78,25 @@ export function PianoRollGraph({ speed, replay = null, now, height = 300 }: Pian
         }
       }
 
-      // ---- auto-center on the latest voiced note (eased)
+      // ---- auto-center: ease toward the middle of the notes sung in the last few seconds
+      // (not the latest frame), so leaps and glitches do not swing the view around.
       let latest = 0;
+      let lo = Infinity;
+      let hi = -Infinity;
       for (let i = pts.length - 1; i >= 0; i--) {
-        if (pts[i].m > 0) {
-          latest = pts[i].m;
-          break;
-        }
+        const p = pts[i];
+        if (p.m <= 0) continue;
+        if (latest === 0) latest = p.m;
+        if (tNow - p.t > CENTER_WINDOW_SEC) break;
+        if (p.m < lo) lo = p.m;
+        if (p.m > hi) hi = p.m;
       }
-      if (latest > 0) centerRef.current += (latest - centerRef.current) * 0.08;
+      if (latest > 0) {
+        const mid = lo <= hi ? (lo + hi) / 2 : latest;
+        // keep the latest note inside the view even if the phrase range is wide
+        const want = Math.max(latest - (ROWS_EACH_SIDE - 1), Math.min(latest + (ROWS_EACH_SIDE - 1), mid));
+        centerRef.current += (want - centerRef.current) * 0.06;
+      }
       const center = centerRef.current;
       const rows = ROWS_EACH_SIDE * 2 + 1;
       const graphH = h - TIMELINE_H;
@@ -112,15 +123,6 @@ export function PianoRollGraph({ speed, replay = null, now, height = 300 }: Pian
         g.moveTo(0, y0);
         g.lineTo(w, y0);
         g.stroke();
-        if (isSharp(m)) {
-          g.fillStyle = '#060607';
-          g.fillRect(0, y0 + 1, LABEL_W - 8, rowH - 2);
-          g.fillStyle = m === curRow ? '#f5c542' : '#4a4a52';
-          g.fillText(noteLabel(m).replace('#', '♯'), 3, yc);
-        } else {
-          g.fillStyle = m === curRow ? '#f5c542' : noteName(m) === 'C' ? '#9a9aa4' : '#5c5c66';
-          g.fillText(noteLabel(m), 4, yc);
-        }
       }
       // clip graph area
       g.save();
@@ -174,6 +176,23 @@ export function PianoRollGraph({ speed, replay = null, now, height = 300 }: Pian
       }
       g.stroke();
       g.restore();
+
+      // ---- row labels on top of the trace (solid gutter so the trace never hides them)
+      for (let m = botMidi; m <= topMidi; m++) {
+        const yc = yOfMidi(m);
+        const y0 = yc - rowH / 2;
+        if (y0 + rowH < TIMELINE_H || y0 > h) continue;
+        const sharp = isSharp(m);
+        g.fillStyle = sharp ? '#060607' : m === curRow ? 'rgba(245,197,66,0.16)' : octaveOf(m) % 2 === 0 ? '#0e0e11' : '#121216';
+        g.fillRect(0, Math.max(TIMELINE_H, y0), LABEL_W - 6, rowH);
+        g.fillStyle = m === curRow ? '#f5c542' : sharp ? '#4a4a52' : noteName(m) === 'C' ? '#9a9aa4' : '#5c5c66';
+        g.fillText(noteLabel(m).replace('#', '♯'), 4, yc);
+      }
+      g.strokeStyle = '#2b2b32';
+      g.beginPath();
+      g.moveTo(LABEL_W - 6 + 0.5, TIMELINE_H);
+      g.lineTo(LABEL_W - 6 + 0.5, h);
+      g.stroke();
 
       // ---- timeline
       g.fillStyle = '#0a0a0c';

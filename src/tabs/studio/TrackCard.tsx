@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useStudio } from '../../state/studioStore';
+import { useStudio, loopPair } from '../../state/studioStore';
 import { useSettings } from '../../state/settings';
 import { trackPlayer, type PlayerSnapshot } from '../../audio/player/TrackPlayer';
 import { formatTime, formatTimePrecise, parseTime } from '../../music/notes';
@@ -11,6 +11,12 @@ export function TrackCard() {
   const [snap, setSnap] = useState<PlayerSnapshot>(trackPlayer.state);
   const [editMarkers, setEditMarkers] = useState(false);
   const [bigTile, setBigTile] = useState<'transpose' | 'speed' | null>(null);
+  const [clearArmed, setClearArmed] = useState(false);
+  useEffect(() => {
+    if (!clearArmed) return;
+    const t = setTimeout(() => setClearArmed(false), 3000);
+    return () => clearTimeout(t);
+  }, [clearArmed]);
   const fileRef = useRef<HTMLInputElement>(null);
   const timeEl = useRef<HTMLSpanElement>(null);
   const seekEl = useRef<HTMLInputElement>(null);
@@ -35,15 +41,30 @@ export function TrackCard() {
   const meta = st.meta;
   const sorted = meta ? [...meta.bookmarks].sort((a, b) => a.time - b.time) : [];
   const sections = Math.max(0, sorted.length - 1);
-  const loopActive = !!meta?.loopOn && meta.activeLoop !== null && meta.activeLoop < sections;
-  const loopLabel = loopActive ? `${meta!.activeLoop! + 1}–${meta!.activeLoop! + 2}` : 'Loop';
+  const [loopA, loopB] = meta ? loopPair(meta) : [null, null];
+  const loopActive = !!meta?.loopOn && loopA !== null && loopB !== null;
+  const [pending, setPending] = useState<number | null>(null);
+  useEffect(() => setPending(null), [st.track?.id]);
+  const loopLabel = pending !== null ? `${pending + 1}–?` : loopA !== null && loopB !== null ? `${loopA + 1}–${loopB + 1}` : 'Loop';
 
-  /** Tapping marker i selects the section i→i+1 (last marker: the section before it). */
+  /**
+   * Marker taps: first tap picks the start, second tap (another marker) picks the end.
+   * Tapping the same marker twice just jumps to it.
+   */
   const selectMarker = (i: number) => {
-    if (!meta || sections === 0) return;
-    const idx = Math.min(i, sections - 1);
-    if (meta.loopOn && meta.activeLoop === idx) trackPlayer.seek(sorted[i].time);
-    else st.setActiveLoop(idx);
+    if (!meta) return;
+    if (pending === null) {
+      setPending(i);
+      trackPlayer.seek(sorted[i].time);
+      return;
+    }
+    if (pending === i) {
+      setPending(null);
+      trackPlayer.seek(sorted[i].time);
+      return;
+    }
+    st.setLoopRange(pending, i);
+    setPending(null);
   };
 
   return (
@@ -112,10 +133,10 @@ export function TrackCard() {
               </div>
             </div>
             <button
-              className={`pill${loopActive ? ' accent' : ' ghost'} mono`}
+              className={`pill${loopActive || pending !== null ? ' accent' : ' ghost'} mono`}
               onClick={() => st.cycleLoop()}
               disabled={sections === 0}
-              title="Cycle loop section"
+              title="Cycle through sections"
               style={{ minWidth: 56, justifyContent: 'center' }}
             >
               ⟲ {loopLabel}
@@ -154,7 +175,9 @@ export function TrackCard() {
           <LoopTimeline
             duration={snap.duration}
             markers={sorted}
-            activeLoop={loopActive || (meta.activeLoop !== null && meta.activeLoop < sections) ? meta.activeLoop : null}
+            loopA={loopA}
+            loopB={loopB}
+            pending={pending}
             loopOn={meta.loopOn}
             position={position}
             onSeek={(sec) => trackPlayer.seek(sec)}
@@ -174,25 +197,28 @@ export function TrackCard() {
               </button>
             </div>
             <button
-              className="tool"
+              className={`tool${clearArmed ? ' danger' : ''}`}
               onClick={() => {
-                if (window.confirm('Remove all markers for this track?')) st.clearBookmarks();
+                if (clearArmed) {
+                  st.clearBookmarks();
+                  setClearArmed(false);
+                } else setClearArmed(true);
               }}
               disabled={sorted.length === 0}
-              title="Clear markers"
-              style={{ color: 'var(--bad)' }}
+              title="Clear all markers"
+              style={clearArmed ? { width: 'auto', padding: '0 10px', fontSize: 12 } : { color: 'var(--bad)' }}
             >
-              ✕
+              {clearArmed ? 'Clear all markers?' : '✕'}
             </button>
           </div>
           {sorted.length === 0 ? (
-            <div className="empty">Tap + to drop a marker at the playhead. Two markers make a loop section.</div>
+            <div className="empty">Tap + to drop a marker at the playhead. Then tap a start marker and an end marker to loop between them.</div>
           ) : (
             <div className="chips scroll" style={{ marginTop: 8 }}>
               {sorted.map((m, i) => {
-                const on = loopActive && (i === meta.activeLoop || i === meta.activeLoop! + 1);
+                const on = i === loopA || i === loopB;
                 return (
-                  <button key={m.id} className={`marker-chip${on ? ' on' : ''}`} onClick={() => selectMarker(i)} title="Tap: loop from here · tap again: jump">
+                  <button key={m.id} className={`marker-chip${on ? ' on' : ''}${i === pending ? ' pending' : ''}`} onClick={() => selectMarker(i)} title="Tap a start marker, then an end marker">
                     <span className="row" style={{ gap: 6 }}>
                       <span className="num">{i + 1}</span>
                       {!/^Pin \d+$/.test(m.name) && (
