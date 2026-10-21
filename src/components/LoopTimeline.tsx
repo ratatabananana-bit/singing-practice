@@ -11,7 +11,6 @@ export function LoopTimeline({
   markers,
   loopA,
   loopB,
-  pending,
   loopOn,
   position,
   onSeek,
@@ -28,8 +27,6 @@ export function LoopTimeline({
   markers: Bookmark[];
   loopA: number | null;
   loopB: number | null;
-  /** Marker index tapped as the start of a new range, waiting for the end marker. */
-  pending: number | null;
   loopOn: boolean;
   /** Current position in seconds (called every frame). */
   position: () => number;
@@ -127,7 +124,7 @@ export function LoopTimeline({
       {markers.map((m, i) => (
         <button
           key={m.id}
-          className={`timeline-pin${i === loopA || i === loopB ? ' on' : ''}${i === pending ? ' pending' : ''}`}
+          className={`timeline-pin${i === loopA || i === loopB ? ' on' : ''}`}
           style={{ left: `${pct(m.time)}%` }}
           onPointerDown={(e) => {
             e.stopPropagation();

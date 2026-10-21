@@ -13,3 +13,5 @@ ios
 public/dev
 voice sample.mp3
 *.apk
+android/keystore/
+android/keystore.properties
