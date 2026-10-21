@@ -272,36 +272,52 @@ function StepTile({
         </div>
         <div className="row" style={{ marginTop: 2 }}>
           <button className="tile-btn" onClick={() => onSet(Math.max(min, raw - step))} aria-label={`${label} down`}>
-            −
+            <MinusIcon />
           </button>
           <input type="range" min={min} max={max} step={step} value={raw} onChange={(e) => onSet(parseFloat(e.target.value))} />
           <button className="tile-btn" onClick={() => onSet(Math.min(max, raw + step))} aria-label={`${label} up`}>
-            +
+            <PlusIcon />
           </button>
         </div>
       </div>
     );
   }
   return (
-    <div className="tile grow" style={{ position: 'relative' }}>
-      <button className="tile-expand" onClick={() => onBig(true)} title="Expand" aria-label={`Expand ${label}`}>
-        ⤢
-      </button>
+    <div className="tile grow">
       <div className="row between" style={{ gap: 4 }}>
         <button className="tile-btn" onClick={() => onSet(Math.max(min, raw - step))} aria-label={`${label} down`}>
-          −
+          <MinusIcon />
         </button>
         <button className="mono" style={{ fontSize: 18, fontWeight: 700, color, minWidth: 52 }} onClick={onReset} title="Tap to reset">
           {value}
         </button>
         <button className="tile-btn" onClick={() => onSet(Math.min(max, raw + step))} aria-label={`${label} up`}>
-          +
+          <PlusIcon />
         </button>
       </div>
-      <div className="label" style={{ textAlign: 'center', marginTop: 2 }}>
-        {label}
+      <div className="row" style={{ justifyContent: 'center', gap: 6, marginTop: 2 }}>
+        <span className="label">{label}</span>
+        <button className="tile-expand" onClick={() => onBig(true)} title="Expand" aria-label={`Expand ${label}`}>
+          ⤢
+        </button>
       </div>
     </div>
+  );
+}
+
+function MinusIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
+      <rect x="2" y="6" width="10" height="2" rx="1" fill="currentColor" />
+    </svg>
+  );
+}
+function PlusIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
+      <rect x="2" y="6" width="10" height="2" rx="1" fill="currentColor" />
+      <rect x="6" y="2" width="2" height="10" rx="1" fill="currentColor" />
+    </svg>
   );
 }
 

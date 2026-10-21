@@ -876,23 +876,22 @@ canvas.graph {
 .tile-btn {
   width: 32px;
   height: 32px;
+  flex: none;
   border-radius: 50%;
   background: var(--card3);
   border: 1px solid var(--border);
-  font-size: 18px;
-  font-weight: 600;
   color: var(--text);
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  line-height: 0;
+  padding: 0;
 }
 .tile-expand {
-  position: absolute;
-  top: 2px;
-  left: 4px;
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
   font-size: 11px;
+  line-height: 1;
   color: var(--dim);
   display: inline-flex;
   align-items: center;
