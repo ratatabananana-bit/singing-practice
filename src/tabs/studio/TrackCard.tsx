@@ -242,6 +242,8 @@ export function TrackCard() {
             onSeek={(sec) => trackPlayer.seek(sec)}
             onMoveMarker={(id, sec) => st.updateBookmark(id, { time: sec })}
             onSelectMarker={selectMarker}
+            grid={meta.beatGrid ?? null}
+            beatsPerBar={meta.beatsPerBar ?? 4}
             sections={songSections}
             activeSection={meta.loopOn ? (meta.activeSection ?? null) : null}
             onSelectSection={(id) => st.loopSection(meta.activeSection === id && meta.loopOn ? null : id)}
@@ -250,6 +252,15 @@ export function TrackCard() {
             <div className="row" style={{ gap: 6 }}>
               <button className="tool" onClick={() => st.addBookmark(trackPlayer.estimatePosition())} title="Add marker at playhead">
                 +
+              </button>
+              <button
+                className={`tool${meta.snapOn && meta.beatGrid ? ' on' : ''}`}
+                onClick={() => st.setMeta({ snapOn: !meta.snapOn })}
+                disabled={!meta.beatGrid}
+                title={meta.beatGrid ? `Snap markers and sections to beats (${meta.beatGrid.bpm} BPM)` : meta.beatGrid === null ? 'No steady beat found' : 'Detecting tempo…'}
+                style={{ width: 'auto', padding: '0 10px', fontSize: 12 }}
+              >
+                {meta.beatGrid ? `⫶ ${Math.round(meta.beatGrid.bpm)}` : meta.beatGrid === null ? '⫶ –' : '⫶ …'}
               </button>
               <button
                 className="tool"
@@ -367,6 +378,21 @@ export function TrackCard() {
                   </button>
                 );
               })}
+            </div>
+          )}
+          {editMarkers && (
+            <div className="row between" style={{ marginTop: 8, fontSize: 12 }}>
+              <span className="muted">
+                Beat grid{meta.beatGrid ? ` · ${meta.beatGrid.bpm} BPM` : meta.beatGrid === null ? ' · none found' : ' · detecting…'}
+              </span>
+              <div className="row" style={{ gap: 6 }}>
+                <button className="chip sm" onClick={() => st.setDownbeat(trackPlayer.estimatePosition())} disabled={!meta.beatGrid} title="Make the beat at the playhead a bar line">
+                  bar here
+                </button>
+                <button className="chip sm" onClick={() => st.detectBeats()} title="Detect the tempo again">
+                  re-detect
+                </button>
+              </div>
             </div>
           )}
           {editMarkers && sorted.length > 0 && (

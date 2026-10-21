@@ -114,6 +114,11 @@ export class TrackPlayer {
     const buf = await ctx.decodeAudioData(ab);
     const left = buf.getChannelData(0).slice();
     const right = buf.numberOfChannels > 1 ? buf.getChannelData(1).slice() : left;
+    // Mono preview (~11 kHz) kept for beat detection; built before the buffers are transferred.
+    const dec = Math.max(1, Math.round(ctx.sampleRate / 11025));
+    const mono = new Float32Array(Math.floor(left.length / dec));
+    for (let i = 0; i < mono.length; i++) mono[i] = (left[i * dec] + right[i * dec]) / 2;
+    this.monoPreview = { data: mono, sampleRate: ctx.sampleRate / dec };
     node.port.postMessage({ type: 'load', left, right }, right === left ? [left.buffer] : [left.buffer, right.buffer]);
     this.emit({ loaded: true, playing: false, position: 0, duration: buf.duration, loopOn: false, loopStart: 0, loopEnd: 0 });
     // re-apply speed/transpose
@@ -185,6 +190,12 @@ export class TrackPlayer {
       end: Math.floor(end * this.sampleRate),
     });
     this.emit({ loopOn: on, loopStart: start, loopEnd: end });
+  }
+
+  private monoPreview: { data: Float32Array; sampleRate: number } | null = null;
+  /** Low-rate mono copy of the loaded track (for analysis), or null. */
+  getMonoPreview(): { data: Float32Array; sampleRate: number } | null {
+    return this.monoPreview;
   }
 
   /** Smooth position estimate between worklet reports (for rAF-driven UI). */

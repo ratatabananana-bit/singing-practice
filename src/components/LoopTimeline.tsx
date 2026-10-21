@@ -20,6 +20,8 @@ export function LoopTimeline({
   sections = [],
   activeSection = null,
   onSelectSection,
+  grid = null,
+  beatsPerBar = 4,
 }: {
   duration: number;
   /** Sorted by time. */
@@ -37,6 +39,8 @@ export function LoopTimeline({
   sections?: Section[];
   activeSection?: string | null;
   onSelectSection?: (id: string) => void;
+  grid?: { bpm: number; offset: number } | null;
+  beatsPerBar?: number;
 }) {
   const bar = useRef<HTMLDivElement>(null);
   const head = useRef<HTMLDivElement>(null);
@@ -84,6 +88,24 @@ export function LoopTimeline({
       onPointerCancel={() => (drag.current = null)}
     >
       <div className="timeline-track" />
+      {grid && duration > 0 && (
+        <>
+          <div
+            className="timeline-beats"
+            style={{
+              backgroundSize: `${((60 / grid.bpm) / duration) * 100}% 100%`,
+              backgroundPosition: `${(grid.offset / duration) * 100}% 0`,
+            }}
+          />
+          <div
+            className="timeline-bars"
+            style={{
+              backgroundSize: `${(((60 / grid.bpm) * beatsPerBar) / duration) * 100}% 100%`,
+              backgroundPosition: `${(grid.offset / duration) * 100}% 0`,
+            }}
+          />
+        </>
+      )}
       {a && b && (
         <div className={`timeline-loop${loopOn ? ' on' : ''}`} style={{ left: `${pct(a.time)}%`, width: `${pct(b.time) - pct(a.time)}%` }} />
       )}

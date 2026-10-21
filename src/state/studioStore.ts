@@ -3,6 +3,8 @@ import { storage, uid, type Bookmark, type Section, type TakeRecord, type TrackM
 import { trackPlayer, TrackPlayer } from '../audio/player/TrackPlayer';
 import { useSettings } from './settings';
 import { instrument } from '../audio/synth/Instrument';
+import BeatWorker from '../audio/dsp/beats.worker?worker';
+import { snapToBeat, type BeatGrid } from '../audio/dsp/beats';
 import * as pitchHistory from './pitchHistory';
 
 /** Second player instance for takes (so a take can play over / instead of the track). */
@@ -50,6 +52,12 @@ export interface StudioState {
   playTake: (id: string) => Promise<void>;
   stopTake: () => void;
   setError: (e: string | null) => void;
+  /** Run beat detection on the loaded track (also runs automatically after load). */
+  detectBeats: () => void;
+  /** Snap a time to the beat grid when snapping is on. */
+  snap: (t: number) => number;
+  /** Make the beat nearest to `t` a bar line. */
+  setDownbeat: (t: number) => void;
   setTrainer: (t: Partial<StudioState['trainer']>) => void;
   toggleStar: (id: string) => Promise<void>;
 }
@@ -127,6 +135,7 @@ export const useStudio = create<StudioState>()((set, get) => ({
     const meta = await storage.getMeta(id);
     useSettings.getState().set({ lastTrackId: saved ? id : null });
     set({ track: { id, name: file.name }, meta, busy: false });
+    if (meta.beatGrid === undefined) get().detectBeats();
     trackPlayer.setSpeed(meta.speed);
     trackPlayer.setTranspose(meta.transpose);
     trackPlayer.setFineCents(meta.fineCents ?? 0);
@@ -168,6 +177,7 @@ export const useStudio = create<StudioState>()((set, get) => ({
     }
     const meta = await storage.getMeta(id);
     set({ track: { id, name: rec.name }, meta, busy: false });
+    if (meta.beatGrid === undefined) get().detectBeats();
     trackPlayer.setSpeed(meta.speed);
     trackPlayer.setTranspose(meta.transpose);
     trackPlayer.setFineCents(meta.fineCents ?? 0);
@@ -188,12 +198,13 @@ export const useStudio = create<StudioState>()((set, get) => ({
     const meta = get().meta;
     if (!meta) return;
     const n = meta.bookmarks.length + 1;
-    const bm: Bookmark = { id: uid(), name: `Pin ${n}`, time };
+    const bm: Bookmark = { id: uid(), name: `Pin ${n}`, time: get().snap(time) };
     get().setMeta({ bookmarks: [...meta.bookmarks, bm] });
   },
   updateBookmark(id, patch) {
     const meta = get().meta;
     if (!meta) return;
+    if (patch.time !== undefined) patch = { ...patch, time: get().snap(patch.time) };
     const next = { ...meta, bookmarks: meta.bookmarks.map((b) => (b.id === id ? { ...b, ...patch } : b)) };
     set({ meta: next });
     persistMeta(next);
@@ -255,6 +266,8 @@ export const useStudio = create<StudioState>()((set, get) => ({
   updateSection(id, patch) {
     const meta = get().meta;
     if (!meta) return;
+    if (patch.start !== undefined) patch = { ...patch, start: get().snap(patch.start) };
+    if (patch.end !== undefined) patch = { ...patch, end: get().snap(patch.end) };
     const next = { ...meta, sections: (meta.sections ?? []).map((x) => (x.id === id ? { ...x, ...patch } : x)) };
     set({ meta: next });
     persistMeta(next);
@@ -333,6 +346,39 @@ export const useStudio = create<StudioState>()((set, get) => ({
     set({ replayTakeId: null });
   },
   setError: (e) => set({ error: e }),
+  detectBeats() {
+    const meta = get().meta;
+    const prev = trackPlayer.getMonoPreview();
+    if (!meta || !prev) return;
+    const trackId = meta.trackId;
+    const w = new BeatWorker();
+    w.onmessage = (e: MessageEvent<BeatGrid | null>) => {
+      w.terminate();
+      const cur = get().meta;
+      if (!cur || cur.trackId !== trackId) return;
+      const next = { ...cur, beatGrid: e.data, beatsPerBar: cur.beatsPerBar ?? 4 };
+      set({ meta: next });
+      persistMeta(next);
+    };
+    w.postMessage({ mono: prev.data, sampleRate: prev.sampleRate });
+  },
+  snap(t) {
+    const meta = get().meta;
+    if (!meta?.snapOn || !meta.beatGrid) return t;
+    return snapToBeat(t, meta.beatGrid);
+  },
+  setDownbeat(t) {
+    const meta = get().meta;
+    if (!meta?.beatGrid) return;
+    const period = 60 / meta.beatGrid.bpm;
+    const k = Math.round((t - meta.beatGrid.offset) / period);
+    const bar = meta.beatsPerBar ?? 4;
+    // keep the beat phase, shift the bar phase so beat k is a downbeat
+    const barOffset = ((k % bar) + bar) % bar;
+    const next = { ...meta, beatGrid: { ...meta.beatGrid, offset: meta.beatGrid.offset + barOffset * period - Math.floor((meta.beatGrid.offset + barOffset * period) / (period * bar)) * period * bar } };
+    set({ meta: next });
+    persistMeta(next);
+  },
   setTrainer: (t) => set({ trainer: { ...get().trainer, ...t } }),
   async toggleStar(id) {
     const take = get().takes.find((x) => x.id === id);

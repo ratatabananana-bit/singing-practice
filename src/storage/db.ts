@@ -39,6 +39,10 @@ export interface TrackMeta {
   speed: number;
   transpose: number;
   fineCents?: number;
+  /** Detected tempo grid, null when detection failed, undefined when not run yet. */
+  beatGrid?: { bpm: number; offset: number; confidence: number } | null;
+  beatsPerBar?: number;
+  snapOn?: boolean;
   loopGap?: number;
   lastPosition: number;
 }

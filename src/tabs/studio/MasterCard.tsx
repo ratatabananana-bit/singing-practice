@@ -81,9 +81,11 @@ export function MasterCard() {
       if (replayTake) st.stopTake();
       if (st.countdown > 0) return;
       if (settings.countIn) {
-        // Four clicks at 100 BPM (Transpose's fallback tempo), then record.
+        // Four clicks at the song tempo (× speed) when known, else 100 BPM, then record.
         const ctx = getAudioContext();
-        const beat = 0.6;
+        const grid = useStudio.getState().meta?.beatGrid;
+        const bpm = grid && trackPlayer.state.loaded ? grid.bpm * trackPlayer.state.speed : 100;
+        const beat = 60 / bpm;
         const t0 = ctx.currentTime + 0.05;
         for (let i = 0; i < 4; i++) instrument.click(t0 + i * beat, i === 0);
         for (let i = 0; i < 4; i++) setTimeout(() => useStudio.setState({ countdown: 4 - i }), i * beat * 1000);
