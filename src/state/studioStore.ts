@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { storage, uid, type Bookmark, type TakeRecord, type TrackMeta } from '../storage/db';
 import { trackPlayer, TrackPlayer } from '../audio/player/TrackPlayer';
 import { useSettings } from './settings';
+import { instrument } from '../audio/synth/Instrument';
 
 /** Second player instance for takes (so a take can play over / instead of the track). */
 export const takePlayer = new TrackPlayer();
@@ -231,5 +232,5 @@ void useStudio.getState().refreshTakes();
 
 // Dev hooks for driving the app from the console / automated checks.
 if (import.meta.env.DEV) {
-  (window as unknown as { __dev: unknown }).__dev = { useStudio, trackPlayer, takePlayer, useSettings };
+  (window as unknown as { __dev: unknown }).__dev = { useStudio, trackPlayer, takePlayer, useSettings, instrument };
 }

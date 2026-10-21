@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useSettings, type AutoAdvance } from '../state/settings';
+import { useSettings, type AutoAdvance, type IntroMode } from '../state/settings';
 import { SCALES, SCALE_BY_ID, buildSequence, degreeLabel, degreeString, isInScale, turnIndex, type Direction, type ScaleDef } from '../music/scales';
 import { centsOff, noteLabel, noteName, octaveOf, clampMidi } from '../music/notes';
 import { Sequencer } from '../audio/sequencer';
@@ -12,6 +12,8 @@ import { useDisplayNote } from '../state/pitchStore';
 
 const ADVANCE_NEXT: Record<AutoAdvance, AutoAdvance> = { off: 'up', up: 'down', down: 'off' };
 const ADVANCE_LABEL: Record<AutoAdvance, string> = { off: 'Auto-advance off', up: 'Auto-advance ↑', down: 'Auto-advance ↓' };
+const INTRO_NEXT: Record<IntroMode, IntroMode> = { off: '15', '15': '135', '135': 'off' };
+const INTRO_LABEL: Record<IntroMode, string> = { off: 'Intro off', '15': 'Intro 1–5', '135': 'Intro 1–3–5' };
 
 export function PlayTab() {
   const s = useSettings();
@@ -129,9 +131,18 @@ export function PlayTab() {
         </div>
         <div className="row between" style={{ marginTop: 12 }}>
           <span className="label">Sequence</span>
-          <button className={`pill sm${s.autoAdvance !== 'off' ? ' accent' : ' ghost'}`} onClick={() => s.set({ autoAdvance: ADVANCE_NEXT[s.autoAdvance] })}>
-            {ADVANCE_LABEL[s.autoAdvance]}
-          </button>
+          <div className="row" style={{ gap: 6 }}>
+            <button
+              className={`pill sm${s.intro !== 'off' ? ' accent' : ' ghost'}`}
+              onClick={() => s.set({ intro: INTRO_NEXT[s.intro] })}
+              title="Key cue played before each run"
+            >
+              {INTRO_LABEL[s.intro]}
+            </button>
+            <button className={`pill sm${s.autoAdvance !== 'off' ? ' accent' : ' ghost'}`} onClick={() => s.set({ autoAdvance: ADVANCE_NEXT[s.autoAdvance] })}>
+              {ADVANCE_LABEL[s.autoAdvance]}
+            </button>
+          </div>
         </div>
         <div className="chips" style={{ marginTop: 6 }}>
           {chipNotes.map((offset, i) => (
