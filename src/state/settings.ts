@@ -49,8 +49,6 @@ export interface SettingsState {
   silenceDb: number;
   /** Studio graph scroll speed in px per second. */
   graphSpeed: number;
-  /** Daily goal in notes hit / nailed. */
-  dailyGoal: number;
   /** Manual latency offset in ms (added to measured). */
   latencyOffsetMs: number;
   measuredLatencyMs: number | null;
@@ -96,7 +94,6 @@ export const useSettings = create<SettingsState>()(
       holdSeconds: 1.5,
       silenceDb: -50,
       graphSpeed: 60,
-      dailyGoal: 50,
       latencyOffsetMs: 0,
       measuredLatencyMs: null,
       pitch: { ...DEFAULT_PITCH_DEBUG },

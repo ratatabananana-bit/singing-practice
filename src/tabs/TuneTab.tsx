@@ -14,8 +14,6 @@ import { Median3 } from '../audio/pitch/tracker';
 import { smoothTrace } from '../components/traceSmooth';
 import { steadiness } from '../music/scoring';
 import { RangePill } from '../components/RangeControl';
-import { useHistory } from '../state/historyStore';
-import { HistoryCard } from '../components/HistoryCard';
 
 const GRAPH_SECONDS = 7;
 
@@ -75,18 +73,6 @@ export function TuneTab() {
   const onNailed = useCallback(
     (midi: number, cents: number, steady: number) => {
       setNailed((n) => [{ midi, cents, steady, at: Date.now() }, ...n].slice(0, 50));
-      const st = useSettings.getState();
-      void useHistory.getState().log({
-        tab: 'tune',
-        exerciseId: st.tuneMode === 'scale' ? st.playScale : 'note',
-        root: midi,
-        bpm: 0,
-        hits: 1,
-        total: 1,
-        avgCents: cents,
-        precision: steady,
-        sustain: 1,
-      });
       if (useSettings.getState().tuneMode === 'scale') advance();
     },
     [advance],
@@ -189,8 +175,6 @@ export function TuneTab() {
           </div>
         )}
       </section>
-
-      <HistoryCard tab="tune" />
     </>
   );
 }
