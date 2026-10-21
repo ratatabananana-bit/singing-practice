@@ -40,7 +40,7 @@ Add the microphone permission to the native project (`RECORD_AUDIO` on Android, 
 
 ### Dev helpers
 
-- `?fakemic=220` replaces the microphone with a voice-like oscillator (sawtooth + vibrato) so the whole pipeline can be exercised where mic capture is blocked. `window.__fakemic.setFreq(hz)` and `.setLevel(0..1)` change it live.
+- `?fakemic=220` replaces the microphone with a voice-like oscillator (sawtooth + vibrato) so the whole pipeline can be exercised where mic capture is blocked. `window.__fakemic.setFreq(hz)` and `.setLevel(0..1)` change it live. `?fakemic=file:/dev/voice.mp3` loops an audio file from `public/dev/` into the pitch engine instead (real-voice testing).
 - In dev builds `window.__dev` exposes the studio store, both players and the settings store.
 - `public/dev/test.wav` (git-ignored, regenerate with the snippet in git history or any audio file) is a 20 s stereo test track.
 

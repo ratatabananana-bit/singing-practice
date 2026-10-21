@@ -93,6 +93,24 @@ export function SettingsSheet({ onClose }: { onClose: () => void }) {
             <Slider label="Silence gate" value={s.silenceDb} min={-80} max={-20} step={1} unit="dB" onChange={(v) => s.set({ silenceDb: v })} />
             <div className="desc">Below the gate, input counts as silence everywhere (tuner, graphs, takes).</div>
             <Slider label="Graph speed (Studio)" value={s.graphSpeed} min={20} max={200} step={5} unit="px/s" onChange={(v) => s.set({ graphSpeed: v })} />
+            <div className="row between" style={{ fontSize: 12 }}>
+              <span className="muted">Graph line</span>
+              <div className="seg">
+                {(
+                  [
+                    [0, 'Raw'],
+                    [1, 'Steady'],
+                    [2, 'Smooth'],
+                    [3, 'Notes'],
+                  ] as [number, string][]
+                ).map(([v, name]) => (
+                  <button key={v} className={s.pitch.graphSmoothing === v ? 'on' : ''} onClick={() => s.setPitch({ graphSmoothing: v })}>
+                    {name}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="desc">Display only. Steady drops single-frame glitches, Smooth also rounds the line, Notes snaps to semitone lanes like a karaoke game. Tuning always uses raw pitch.</div>
           </div>
 
           <div className="setting">

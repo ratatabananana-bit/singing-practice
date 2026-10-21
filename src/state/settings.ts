@@ -20,6 +20,8 @@ export interface PitchDebug {
   /** Moving-average length for the Tune tab (frames). */
   tuneSmoothing: number;
   hopMs: number;
+  /** Display-only smoothing of graph traces (0 = raw, 1 = light, 2 = heavy). Never affects tuning. */
+  graphSmoothing: number;
 }
 
 export const DEFAULT_PITCH_DEBUG: PitchDebug = {
@@ -32,7 +34,8 @@ export const DEFAULT_PITCH_DEBUG: PitchDebug = {
   maxFreq: 1200,
   k: 0.9,
   tuneSmoothing: 3,
-  hopMs: 50,
+  hopMs: 25,
+  graphSmoothing: 3,
 };
 
 export interface SettingsState {
@@ -105,7 +108,15 @@ export const useSettings = create<SettingsState>()(
     }),
     {
       name: 'singing-practice-settings',
-      version: 1,
+      version: 2,
+      migrate: (persisted, version) => {
+        const s = persisted as Partial<SettingsState>;
+        if (version < 2 && s.pitch) {
+          // v2: faster analysis rate and display smoothing; keep other debug values.
+          s.pitch = { ...DEFAULT_PITCH_DEBUG, ...s.pitch, hopMs: s.pitch.hopMs === 50 ? 25 : s.pitch.hopMs, graphSmoothing: 3 };
+        }
+        return s as SettingsState;
+      },
       partialize: (s) => {
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
         const { set: _s, setPitch: _sp, resetPitch: _rp, toggleScaleHidden: _t, ...rest } = s;

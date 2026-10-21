@@ -1,6 +1,8 @@
 import { useEffect, useRef } from 'react';
 import { historyLength, historyIndex, times, midis } from '../state/pitchHistory';
 import { isSharp, noteLabel, noteName, octaveOf } from '../music/notes';
+import { useSettings } from '../state/settings';
+import { smoothTrace } from './traceSmooth';
 
 export interface ReplaySource {
   /** [time, midi] pairs; midi 0 = silent. */
@@ -42,6 +44,7 @@ export function PianoRollGraph({ speed, replay = null, now, height = 300 }: Pian
     const draw = () => {
       raf = requestAnimationFrame(draw);
       const { speed, replay, now } = props.current;
+      const smoothing = useSettings.getState().pitch.graphSmoothing;
       const dpr = window.devicePixelRatio || 1;
       const w = cv.clientWidth;
       const h = cv.clientHeight;
@@ -156,25 +159,64 @@ export function PianoRollGraph({ speed, replay = null, now, height = 300 }: Pian
       }
       flush();
 
-      // ---- trace
-      g.lineWidth = 2;
+      // ---- trace (display smoothing; raw values stay untouched for tuning)
+      const sm = smoothTrace(
+        pts.map((p) => p.m),
+        smoothing,
+      );
+      g.lineWidth = 2.2;
       g.strokeStyle = replay ? '#7dd3fc' : '#4ade80';
       g.lineCap = 'round';
+      g.lineJoin = 'round';
       let penDown = false;
       let lastT = 0;
+      let px = 0;
+      let py = 0;
       g.beginPath();
-      for (const p of pts) {
-        if (p.m <= 0 || p.t - lastT > 0.15) penDown = false;
-        if (p.m <= 0) continue;
+      for (let i = 0; i < pts.length; i++) {
+        const p = pts[i];
+        const m = sm[i];
+        if (m <= 0 || p.t - lastT > 0.15) penDown = false;
+        if (m <= 0) continue;
         const x = xOfT(p.t);
-        const y = yOfMidi(p.m);
+        const y = yOfMidi(m);
         if (!penDown) {
           g.moveTo(x, y);
           penDown = true;
+        } else if (smoothing === 3) {
+          // Notes: step line along the semitone lane
+          g.lineTo(x, py);
+          g.lineTo(x, y);
+        } else if (smoothing > 0) {
+          // curve through midpoints for a continuous line
+          g.quadraticCurveTo(px, py, (px + x) / 2, (py + y) / 2);
         } else g.lineTo(x, y);
+        px = x;
+        py = y;
         lastT = p.t;
       }
+      if (penDown && smoothing > 0 && smoothing !== 3) g.lineTo(px, py);
       g.stroke();
+      if (smoothing === 3) {
+        // faint raw pitch under the lanes so vibrato is still visible
+        g.lineWidth = 1;
+        g.strokeStyle = replay ? 'rgba(125,211,252,0.35)' : 'rgba(74,222,128,0.35)';
+        g.beginPath();
+        penDown = false;
+        lastT = 0;
+        for (const p of pts) {
+          if (p.m <= 0 || p.t - lastT > 0.15) penDown = false;
+          if (p.m <= 0) continue;
+          const x = xOfT(p.t);
+          const y = yOfMidi(p.m);
+          if (!penDown) {
+            g.moveTo(x, y);
+            penDown = true;
+          } else g.lineTo(x, y);
+          lastT = p.t;
+        }
+        g.stroke();
+      }
       g.restore();
 
       // ---- row labels on top of the trace (solid gutter so the trace never hides them)

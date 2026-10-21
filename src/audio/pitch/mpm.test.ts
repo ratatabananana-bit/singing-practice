@@ -28,6 +28,29 @@ function voiceLike(freq: number, vibratoHz = 5.5, vibratoCents = 40): Float32Arr
 }
 
 describe('mpm', () => {
+  it('FFT nsdf matches the direct nsdf', async () => {
+    const { nsdf, nsdfFft } = await import('./mpm');
+    const b = voiceLike(220);
+    const a = new Float32Array(900);
+    const f = new Float32Array(900);
+    nsdf(b, 40, 872, a);
+    nsdfFft(b, 40, 872, f);
+    let maxErr = 0;
+    for (let i = 40; i <= 872; i++) maxErr = Math.max(maxErr, Math.abs(a[i] - f[i]));
+    expect(maxErr).toBeLessThan(1e-3);
+  });
+  it('continuity hint resolves an ambiguous octave toward the previous pitch', () => {
+    // 220 Hz with a weak 110 Hz subharmonic: NSDF has a 0.95 peak at 220 and 1.0 at 110,
+    // so plain MPM (k = 0.9) picks 220 while a previous pitch of 110 pulls it to 110.
+    const b = new Float32Array(N);
+    for (let i = 0; i < N; i++) b[i] = 0.5 * Math.sin((2 * Math.PI * 220 * i) / SR) + 0.08 * Math.sin((2 * Math.PI * 110 * i) / SR);
+    const plain = mpm(b, { ...OPTS, k: 0.9 });
+    const withPrev = mpm(b, { ...OPTS, k: 0.9, prevFreq: 110 });
+    const same = mpm(b, { ...OPTS, k: 0.9, prevFreq: 220 });
+    expect(Math.abs(1200 * Math.log2(plain.freq / 220))).toBeLessThan(30);
+    expect(Math.abs(1200 * Math.log2(withPrev.freq / 110))).toBeLessThan(30);
+    expect(Math.abs(1200 * Math.log2(same.freq / 220))).toBeLessThan(30);
+  });
   it('detects a pure sine within 1 cent', () => {
     for (const f of [82.4, 110, 220, 261.6, 440, 880]) {
       const r = mpm(sine(f), OPTS);
@@ -74,7 +97,7 @@ describe('median', () => {
 });
 
 describe('VoicingTracker hysteresis', () => {
-  const P = { clarityOn: 0.9, clarityOff: 0.7, silenceDb: -50, holdFrames: 0, median: false, minFreq: 55, maxFreq: 1200 };
+  const P = { clarityOn: 0.9, clarityOff: 0.7, silenceDb: -50, holdFrames: 0, leapConfirmFrames: 2, median: false, minFreq: 55, maxFreq: 1200 };
   const run = (t: VoicingTracker, f: { freq: number; clarity: number; db: number }) => {
     const r = t.process(f);
     t.remember(r.freq);
@@ -118,5 +141,16 @@ describe('VoicingTracker hysteresis', () => {
     expect(run(t, { freq: 220, clarity: 0.95, db: -20 }).freq).toBe(220);
     expect(run(t, { freq: 440, clarity: 0.95, db: -20 }).freq).toBe(220); // leap: wait one frame
     expect(run(t, { freq: 442, clarity: 0.95, db: -20 }).freq).toBe(442); // confirmed leap
+  });
+  it('a two-frame glitch is rejected when three confirming frames are required', () => {
+    const t = new VoicingTracker({ ...P, leapConfirmFrames: 3 });
+    run(t, { freq: 220, clarity: 0.95, db: -20 });
+    run(t, { freq: 220, clarity: 0.95, db: -20 });
+    expect(run(t, { freq: 440, clarity: 0.95, db: -20 }).freq).toBe(220);
+    expect(run(t, { freq: 441, clarity: 0.95, db: -20 }).freq).toBe(220);
+    expect(run(t, { freq: 220, clarity: 0.95, db: -20 }).freq).toBe(220); // back: glitch never shown
+    expect(run(t, { freq: 440, clarity: 0.95, db: -20 }).freq).toBe(220);
+    expect(run(t, { freq: 440, clarity: 0.95, db: -20 }).freq).toBe(220);
+    expect(run(t, { freq: 440, clarity: 0.95, db: -20 }).freq).toBe(440); // third frame: real leap
   });
 });

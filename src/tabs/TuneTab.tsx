@@ -11,6 +11,7 @@ import { ExercisePicker, RunOptionPills } from '../components/ExercisePicker';
 import { LoudnessMeter, loudnessStatus } from '../components/LoudnessMeter';
 import { useDisplayMidi, useMicState } from '../state/pitchStore';
 import { Median3 } from '../audio/pitch/tracker';
+import { smoothTrace } from '../components/traceSmooth';
 
 const IN_TUNE = 25; // cents
 const GRAPH_SECONDS = 7;
@@ -412,13 +413,19 @@ function TuneGraph({ histT, histC, target }: { histT: React.RefObject<number[]>;
       if (!T.length) return;
       const now = T[T.length - 1];
       const xOf = (t: number) => w - 12 - ((now - t) / GRAPH_SECONDS) * (w - 12);
+      // display smoothing (signed cents → offset so silence can stay 0)
+      const OFF = 10000;
+      const sm = smoothTrace(
+        C.map((c) => (Number.isNaN(c) ? 0 : c + OFF)),
+        useSettings.getState().pitch.graphSmoothing,
+      );
       let last = NaN;
       let lastX = -1;
       let lastY = 0;
       for (let i = 0; i < T.length; i++) {
         const x = xOf(T[i]);
         if (x < 0) continue;
-        let c = C[i];
+        let c = sm[i] > 0 ? sm[i] - OFF : NaN;
         let silent = false;
         if (Number.isNaN(c)) {
           if (Number.isNaN(last)) continue;

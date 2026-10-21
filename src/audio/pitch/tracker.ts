@@ -12,6 +12,8 @@ export interface TrackerParams {
   silenceDb: number;
   /** Extra frames of grace before dropping to unvoiced. */
   holdFrames: number;
+  /** Consecutive agreeing frames needed before a leap of >7 semitones is accepted. */
+  leapConfirmFrames: number;
   /** Apply median-of-3 to the frequency output. */
   median: boolean;
   minFreq: number;
@@ -23,6 +25,7 @@ export const DEFAULT_TRACKER: TrackerParams = {
   clarityOff: 0.75,
   silenceDb: -50,
   holdFrames: 2,
+  leapConfirmFrames: 3,
   median: true,
   minFreq: 55,
   maxFreq: 1200,
@@ -101,21 +104,28 @@ export class VoicingTracker {
         this.onsetFreq = raw.freq;
         return { freq: 0, voiced: false };
       }
-      // Leap guard: a jump of more than 7 semitones between consecutive frames is held
-      // for one frame; it is accepted only if the next frame lands near the same pitch.
+      // Leap guard: a jump of more than 7 semitones between consecutive frames is held;
+      // it is accepted only after `leapConfirmFrames` consecutive frames agree on the new pitch.
       const last = this.lastFreq();
       if (last > 0 && semitonesApart(raw.freq, last) > 7) {
         if (this.jumpCandidate > 0 && semitonesApart(raw.freq, this.jumpCandidate) <= 1) {
+          this.jumpCount++;
+        } else {
+          this.jumpCandidate = raw.freq;
+          this.jumpCount = 1;
+        }
+        if (this.jumpCount >= Math.max(1, p.leapConfirmFrames)) {
           this.jumpCandidate = 0;
+          this.jumpCount = 0;
           this.med.reset();
           const f = p.median ? this.med.push(raw.freq) : raw.freq;
           this.hold = p.holdFrames;
           return { freq: f, voiced: true };
         }
-        this.jumpCandidate = raw.freq;
         return { freq: last, voiced: true };
       }
       this.jumpCandidate = 0;
+      this.jumpCount = 0;
       this.hold = p.holdFrames;
       const f = p.median ? this.med.push(raw.freq) : raw.freq;
       return { freq: f, voiced: true };
@@ -136,6 +146,7 @@ export class VoicingTracker {
 
   private onsetFreq = 0;
   private jumpCandidate = 0;
+  private jumpCount = 0;
 
   private lastValue = 0;
   private lastFreq(): number {

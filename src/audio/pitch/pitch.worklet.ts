@@ -16,7 +16,7 @@ export interface PitchWorkletParams extends TrackerParams {
 export const DEFAULT_WORKLET_PARAMS: PitchWorkletParams = {
   ...DEFAULT_TRACKER,
   k: 0.9,
-  hopSeconds: 0.05,
+  hopSeconds: 0.025,
   enabled: true,
 };
 
@@ -35,6 +35,7 @@ class PitchProcessor extends AudioWorkletProcessor {
   private captureBuf = new Float32Array(4096);
   private captureLen = 0;
   private blockPeak = 0;
+  private prevFreq = 0;
 
   constructor() {
     super();
@@ -42,6 +43,8 @@ class PitchProcessor extends AudioWorkletProcessor {
       const msg = e.data;
       if (msg.type === 'params') {
         this.params = { ...this.params, ...msg.params };
+        // Leaps must agree for ~80 ms regardless of the analysis rate.
+        this.params.leapConfirmFrames = Math.max(2, Math.round(0.08 / Math.max(0.01, this.params.hopSeconds)));
         this.tracker.update(this.params);
       } else if (msg.type === 'capture') {
         if (msg.on && !this.capture) {
@@ -110,14 +113,20 @@ class PitchProcessor extends AudioWorkletProcessor {
     let clarity = 0;
     let voiced = false;
     if (this.params.enabled && db >= this.params.silenceDb - 6) {
-      const r = mpm(w, { sampleRate, minFreq: this.params.minFreq, maxFreq: this.params.maxFreq, k: this.params.k }, this.scratch);
+      const r = mpm(
+        w,
+        { sampleRate, minFreq: this.params.minFreq, maxFreq: this.params.maxFreq, k: this.params.k, prevFreq: this.prevFreq },
+        this.scratch,
+      );
       clarity = r.clarity;
       const out = this.tracker.process({ freq: r.freq, clarity: r.clarity, db });
       this.tracker.remember(out.freq);
       freq = out.freq;
       voiced = out.voiced;
+      this.prevFreq = voiced ? freq : 0;
     } else {
       this.tracker.process({ freq: 0, clarity: 0, db });
+      this.prevFreq = 0;
     }
     this.port.postMessage({ type: 'frame', time: currentTime, freq, voiced, clarity, db, peak });
   }
