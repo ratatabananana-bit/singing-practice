@@ -35,7 +35,7 @@ export function PlayTab() {
     sq.bpm = st.bpm;
     sq.sound = st.sound;
     setPlaying(true);
-    void sq.start(seqNotes, st.intro, root, keepTail);
+    void sq.start(seqNotes, st.intro, root, keepTail, sc.holdBeats ?? 1);
   }, []);
 
   if (!seqRef.current) {
@@ -145,6 +145,7 @@ export function PlayTab() {
           <span className="dim" style={{ fontSize: 11 }}>
             {scale.pattern ? scale.short : degreeString(scale)}
             {turn >= 0 ? ' and back' : ''}
+            {(scale.holdBeats ?? 1) > 1 ? ` · ${scale.holdBeats} beats per note, slide between` : ''}
           </span>
           <SingTarget target={soundingMidi} />
         </div>

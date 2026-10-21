@@ -34,6 +34,7 @@ export class Sequencer {
 
   bpm = 120;
   sound: SoundMode = 'piano';
+  private holdBeats = 1;
 
   constructor(private events: SequencerEvents) {}
 
@@ -49,8 +50,9 @@ export class Sequencer {
    * Start a run: optional intro cue, then the sequence.
    * `keepTail` leaves the previous run's last note ringing (used when auto-advancing).
    */
-  async start(sequence: number[], intro: IntroMode, root: number, keepTail = false): Promise<void> {
+  async start(sequence: number[], intro: IntroMode, root: number, keepTail = false, holdBeats = 1): Promise<void> {
     this.stop(false, !keepTail);
+    this.holdBeats = Math.max(1, holdBeats);
     await unlockAudio();
     const ctx = getAudioContext();
     this.sequence = sequence;
@@ -110,8 +112,9 @@ export class Sequencer {
     }
     if (this.pos < this.sequence.length) {
       const midi = this.sequence[this.pos];
-      this.emit({ midi, time: this.nextTime, index: this.pos }, beat * 0.95);
-      this.nextTime += beat;
+      const hold = beat * this.holdBeats;
+      this.emit({ midi, time: this.nextTime, index: this.pos }, hold * 0.95);
+      this.nextTime += hold;
       this.pos++;
       return;
     }

@@ -30,6 +30,8 @@ export interface ScaleDef {
   exercise: number[];
   /** Fixed pattern: play `exercise` exactly as written, ignore direction. */
   pattern?: boolean;
+  /** Beats each note is held (default 1). Slide patterns hold longer so there is room to glide. */
+  holdBeats?: number;
 }
 
 const S = (id: ScaleId, name: string, short: string, intervals: number[], exercise?: number[]): ScaleDef => ({
@@ -46,6 +48,7 @@ const P = (id: ScaleId, name: string, short: string, intervals: number[], exerci
   intervals,
   exercise,
   pattern: true,
+  holdBeats: 2,
 });
 
 const MAJOR = [0, 2, 4, 5, 7, 9, 11];
