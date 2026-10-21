@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useSettings, type AutoAdvance, type IntroMode } from '../state/settings';
-import { SCALES, SCALE_BY_ID, buildSequence, degreeLabel, degreeString, isInScale, turnIndex, type Direction, type ScaleDef } from '../music/scales';
+import { useSettings } from '../state/settings';
+import { SCALES, SCALE_BY_ID, buildSequence, degreeLabel, degreeString, isInScale, turnIndex } from '../music/scales';
+import { ExercisePicker, RunOptionPills } from '../components/ExercisePicker';
 import { centsOff, noteLabel, noteName, octaveOf, clampMidi } from '../music/notes';
 import { Sequencer } from '../audio/sequencer';
 import { instrument } from '../audio/synth/Instrument';
@@ -10,10 +11,6 @@ import { BpmPill } from '../components/BpmPill';
 import { NoteSlots } from '../components/NoteSlots';
 import { useDisplayNote } from '../state/pitchStore';
 
-const ADVANCE_NEXT: Record<AutoAdvance, AutoAdvance> = { off: 'up', up: 'down', down: 'off' };
-const ADVANCE_LABEL: Record<AutoAdvance, string> = { off: 'Auto-advance off', up: 'Auto-advance ↑', down: 'Auto-advance ↓' };
-const INTRO_NEXT: Record<IntroMode, IntroMode> = { off: '15', '15': '135', '135': 'off' };
-const INTRO_LABEL: Record<IntroMode, string> = { off: 'Intro off', '15': 'Intro 1–5', '135': 'Intro 1–3–5' };
 
 export function PlayTab() {
   const s = useSettings();
@@ -96,7 +93,6 @@ export function PlayTab() {
   const chipNotes = s.playDirection === 'down' ? [...scale.exercise].reverse() : scale.exercise;
   const chipRoot = s.playRoot;
   const chipStep = step < 0 ? -1 : turn >= 0 && step > turn ? 2 * turn - step : step;
-  const visibleScales = SCALES.filter((sc) => !s.hiddenScales.includes(sc.id));
   const inScale = useCallback((m: number) => isInScale(m, s.playRoot, scale), [s.playRoot, scale]);
 
   return (
@@ -131,18 +127,7 @@ export function PlayTab() {
         </div>
         <div className="row between" style={{ marginTop: 12 }}>
           <span className="label">Sequence</span>
-          <div className="row" style={{ gap: 6 }}>
-            <button
-              className={`pill sm${s.intro !== 'off' ? ' accent' : ' ghost'}`}
-              onClick={() => s.set({ intro: INTRO_NEXT[s.intro] })}
-              title="Key cue played before each run"
-            >
-              {INTRO_LABEL[s.intro]}
-            </button>
-            <button className={`pill sm${s.autoAdvance !== 'off' ? ' accent' : ' ghost'}`} onClick={() => s.set({ autoAdvance: ADVANCE_NEXT[s.autoAdvance] })}>
-              {ADVANCE_LABEL[s.autoAdvance]}
-            </button>
-          </div>
+          <RunOptionPills />
         </div>
         <div className="chips" style={{ marginTop: 6 }}>
           {chipNotes.map((offset, i) => (
@@ -169,60 +154,8 @@ export function PlayTab() {
 
       <Piano root={s.playRoot} inScale={inScale} sounding={soundingMidi} onKey={onKey} />
 
-      <section className="card">
-        <div className="row between">
-          <span className="label">Exercise</span>
-          {!scale.pattern && (
-            <div className="seg">
-              {(
-                [
-                  ['up', 'Up'],
-                  ['down', 'Down'],
-                  ['upDown', 'Up-down'],
-                ] as [Direction, string][]
-              ).map(([d, name]) => (
-                <button key={d} className={s.playDirection === d ? 'on' : ''} onClick={() => s.set({ playDirection: d })}>
-                  {name}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-        <div className="chips" style={{ marginTop: 8 }}>
-          {visibleScales
-            .filter((sc) => !sc.pattern)
-            .map((sc) => (
-              <ExerciseChip key={sc.id} sc={sc} on={sc.id === scale.id} onClick={() => s.set({ playScale: sc.id })} />
-            ))}
-        </div>
-        {visibleScales.some((sc) => sc.pattern) && (
-          <>
-            <div className="label" style={{ marginTop: 12 }}>
-              Patterns
-            </div>
-            <div className="chips" style={{ marginTop: 6 }}>
-              {visibleScales
-                .filter((sc) => sc.pattern)
-                .map((sc) => (
-                  <ExerciseChip key={sc.id} sc={sc} on={sc.id === scale.id} onClick={() => s.set({ playScale: sc.id })} />
-                ))}
-            </div>
-          </>
-        )}
-      </section>
+      <ExercisePicker />
     </>
-  );
-}
-
-/** Exercise picker chip: name plus the degree pattern (1 2 3 4 5) so it matches how exercises are described online. */
-function ExerciseChip({ sc, on, onClick }: { sc: ScaleDef; on: boolean; onClick: () => void }) {
-  return (
-    <button className={`chip${on ? ' on' : ''}`} onClick={onClick} style={{ height: 'auto', padding: '5px 10px', flexDirection: 'column', gap: 1, alignItems: 'flex-start' }}>
-      <span style={{ fontSize: 12 }}>{sc.pattern ? sc.short : sc.name}</span>
-      <span className="mono" style={{ fontSize: 10, opacity: 0.75, fontWeight: 500 }}>
-        {sc.pattern ? sc.name : degreeString(sc)}
-      </span>
-    </button>
   );
 }
 

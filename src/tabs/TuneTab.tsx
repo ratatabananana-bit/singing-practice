@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSettings } from '../state/settings';
-import { SCALES, SCALE_BY_ID, isInScale, scaleNotesInRange } from '../music/scales';
-import { centsOff, freqToMidi, freqToNote, midiToFreq, noteLabel, noteName, octaveOf } from '../music/notes';
+import { SCALES, SCALE_BY_ID, buildSequence, degreeString, isInScale, turnIndex } from '../music/scales';
+import { centsOff, clampMidi, freqToMidi, freqToNote, midiToFreq, noteLabel, noteName, octaveOf } from '../music/notes';
 import { detectKey, type KeyGuess } from '../music/keyDetect';
 import { instrument } from '../audio/synth/Instrument';
 import { unlockAudio, getAudioContext } from '../audio/context';
 import { mic } from '../audio/mic/MicService';
-import { Piano } from '../components/Piano';
+import { Piano, PIANO_HI, PIANO_LO } from '../components/Piano';
+import { ExercisePicker, RunOptionPills } from '../components/ExercisePicker';
 import { LoudnessMeter, loudnessStatus } from '../components/LoudnessMeter';
 import { useDisplayMidi, useMicState } from '../state/pitchStore';
 import { Median3 } from '../audio/pitch/tracker';
@@ -22,26 +23,55 @@ interface Nailed {
 
 export function TuneTab() {
   const s = useSettings();
-  const scale = SCALE_BY_ID[s.tuneScale] ?? SCALES[0];
+  const scale = SCALE_BY_ID[s.playScale] ?? SCALES[0];
+  const scaleMode = s.tuneMode === 'scale';
 
-  // Scale mode: the targets walk through the scale from the tapped root.
-  const scaleTargets = useMemo(
-    () => (s.tuneMode === 'scale' ? scaleNotesInRange(s.tuneTarget, scale, s.tuneTarget, s.tuneTarget + 12) : [s.tuneTarget]),
-    [s.tuneMode, s.tuneTarget, scale],
+  // Exercise mode walks through the same exercise as the Play tab (exercise, direction,
+  // intro and auto-advance are shared settings). The tapped key is the root.
+  const sequence = useMemo(
+    () => (scaleMode ? buildSequence(s.tuneTarget, scale, s.playDirection) : [s.tuneTarget]),
+    [scaleMode, s.tuneTarget, scale, s.playDirection],
   );
-  const [scaleIdx, setScaleIdx] = useState(0);
-  const target = scaleTargets[Math.min(scaleIdx, scaleTargets.length - 1)];
-  useEffect(() => setScaleIdx(0), [s.tuneTarget, s.tuneMode, s.tuneScale]);
+  const [idx, setIdx] = useState(0);
+  const target = sequence[Math.min(idx, sequence.length - 1)];
+  const turn = turnIndex(scale, s.playDirection);
+  useEffect(() => setIdx(0), [s.tuneTarget, s.tuneMode, s.playScale, s.playDirection]);
 
   const [nailed, setNailed] = useState<Nailed[]>([]);
   const [attempting, setAttempting] = useState(false);
 
+  /** Cue a key: intro notes if set, otherwise just the root. */
+  const cueKey = useCallback((root: number) => {
+    const st = useSettings.getState();
+    void unlockAudio().then(() => {
+      const ctx = getAudioContext();
+      const notes = st.intro === 'off' ? [root] : st.intro === '15' ? [root, root + 7] : [root, root + 4, root + 7];
+      notes.forEach((n, i) => instrument.play(n, 0.45, st.sound, ctx.currentTime + i * 0.5));
+    });
+  }, []);
+
+  /** Move to the next target; at the end of the run, auto-advance the key or start over. */
+  const advance = useCallback(() => {
+    const st = useSettings.getState();
+    const sc = SCALE_BY_ID[st.playScale] ?? SCALES[0];
+    const n = buildSequence(st.tuneTarget, sc, st.playDirection).length;
+    setIdx((i) => {
+      if (i + 1 < n) return i + 1;
+      if (st.autoAdvance !== 'off') {
+        const next = clampMidi(st.tuneTarget + (st.autoAdvance === 'up' ? 1 : -1), PIANO_LO, PIANO_HI - 12);
+        st.set({ tuneTarget: next });
+        cueKey(next);
+      }
+      return 0;
+    });
+  }, [cueKey]);
+
   const onNailed = useCallback(
     (midi: number, cents: number) => {
       setNailed((n) => [{ midi, cents, at: Date.now() }, ...n].slice(0, 50));
-      if (useSettings.getState().tuneMode === 'scale') setScaleIdx((i) => (i + 1) % scaleTargets.length);
+      if (useSettings.getState().tuneMode === 'scale') advance();
     },
-    [scaleTargets.length],
+    [advance],
   );
 
   const playTarget = () => {
@@ -49,44 +79,62 @@ export function TuneTab() {
   };
   const onKey = (midi: number) => {
     s.set({ tuneTarget: midi });
-    setScaleIdx(0);
-    void unlockAudio().then(() => {
-      if (s.tuneMode === 'scale') {
-        const notes = scaleNotesInRange(midi, scale, midi, midi + 12);
-        const ctx = getAudioContext();
-        notes.forEach((n, i) => instrument.play(n, 0.28, s.sound, ctx.currentTime + i * 0.3));
-      } else instrument.play(midi, 1.0, s.sound);
-    });
+    setIdx(0);
+    if (scaleMode) cueKey(midi);
+    else void unlockAudio().then(() => instrument.play(midi, 1.0, s.sound));
   };
 
   const sungMidi = useDisplayMidi();
-  const inScale = useCallback((m: number) => (s.tuneMode === 'scale' ? isInScale(m, s.tuneTarget, scale) : false), [s.tuneMode, s.tuneTarget, scale]);
+  const inScale = useCallback((m: number) => (scaleMode ? isInScale(m, s.tuneTarget, scale) : false), [scaleMode, s.tuneTarget, scale]);
+  const chipStep = turn >= 0 && idx > turn ? 2 * turn - idx : idx;
+  const chipNotes = s.playDirection === 'down' && !scale.pattern ? [...scale.exercise].reverse() : scale.exercise;
 
   return (
     <>
-      <TunerCard target={target} onNailed={onNailed} onAttempt={setAttempting} onPlay={playTarget} />
+      <TunerCard
+        target={target}
+        onNailed={onNailed}
+        onAttempt={setAttempting}
+        onPlay={playTarget}
+        progress={scaleMode ? { i: idx, n: sequence.length } : null}
+        onNext={scaleMode ? advance : undefined}
+      />
 
       <div className="row between">
         <div className="seg">
-          <button className={s.tuneMode === 'note' ? 'on' : ''} onClick={() => s.set({ tuneMode: 'note' })}>
+          <button className={!scaleMode ? 'on' : ''} onClick={() => s.set({ tuneMode: 'note' })}>
             One Note
           </button>
-          <button className={s.tuneMode === 'scale' ? 'on' : ''} onClick={() => s.set({ tuneMode: 'scale' })}>
-            Scale
+          <button className={scaleMode ? 'on' : ''} onClick={() => s.set({ tuneMode: 'scale' })}>
+            Exercise
           </button>
         </div>
-        {s.tuneMode === 'scale' && (
-          <div className="chips scroll grow">
-            {SCALES.filter((sc) => !sc.pattern && !s.hiddenScales.includes(sc.id)).map((sc) => (
-              <button key={sc.id} className={`chip sm${sc.id === scale.id ? ' on' : ''}`} onClick={() => s.set({ tuneScale: sc.id })}>
-                {sc.short}
-              </button>
-            ))}
-          </div>
-        )}
+        {scaleMode && <RunOptionPills />}
       </div>
 
-      <Piano root={s.tuneTarget} sounding={s.tuneMode === 'scale' ? target : null} sung={sungMidi} inScale={inScale} onKey={onKey} />
+      {scaleMode && (
+        <section className="card" style={{ padding: '8px 12px' }}>
+          <div className="row between">
+            <span className="label">Sequence</span>
+            <span className="dim" style={{ fontSize: 11 }}>
+              {scale.pattern ? scale.short : degreeString(scale)}
+              {turn >= 0 ? ' and back' : ''} · nail each note to move on
+            </span>
+          </div>
+          <div className="chips" style={{ marginTop: 6 }}>
+            {chipNotes.map((offset, i) => (
+              <span key={i} className={`chip sm${i === chipStep ? ' sounding' : ''}`}>
+                {noteLabel(s.tuneTarget + offset)}
+              </span>
+            ))}
+            {turn >= 0 && <span className={`chip sm${idx > turn ? ' on' : ''}`}>↩</span>}
+          </div>
+        </section>
+      )}
+
+      <Piano root={s.tuneTarget} sounding={scaleMode ? target : null} sung={sungMidi} inScale={inScale} onKey={onKey} />
+
+      {scaleMode && <ExercisePicker />}
 
       <section className="card">
         <div className="row between">
@@ -136,11 +184,15 @@ function TunerCard({
   onNailed,
   onAttempt,
   onPlay,
+  progress,
+  onNext,
 }: {
   target: number;
   onNailed: (midi: number, cents: number) => void;
   onAttempt: (attempting: boolean) => void;
   onPlay: () => void;
+  progress: { i: number; n: number } | null;
+  onNext?: () => void;
 }) {
   const { state: micState } = useMicState();
   const [live, setLive] = useState<Live>(QUIET);
@@ -247,7 +299,14 @@ function TunerCard({
             {micState === 'running' ? 'LIVE' : micState === 'starting' ? '…' : 'PAUSED'}
           </button>
         </div>
-        <span className={`pill sm ${keyCls}`}>{keyGuess ? `${keyGuess.label} ${Math.round(keyGuess.confidence * 100)}%` : 'key ?'}</span>
+        <div className="row" style={{ gap: 6 }}>
+          {progress && (
+            <span className="pill sm ghost mono">
+              {progress.i + 1} / {progress.n}
+            </span>
+          )}
+          <span className={`pill sm ${keyCls}`}>{keyGuess ? `${keyGuess.label} ${Math.round(keyGuess.confidence * 100)}%` : 'key ?'}</span>
+        </div>
       </div>
       <div className="row" style={{ marginTop: 8, alignItems: 'flex-start', gap: 12 }}>
         <div style={{ minWidth: 96 }}>
@@ -259,9 +318,16 @@ function TunerCard({
           <div className="dim mono" style={{ fontSize: 11, marginTop: 4 }}>
             {midiToFreq(target).toFixed(1)} Hz
           </div>
-          <button className="btn sm" style={{ marginTop: 8 }} onClick={onPlay}>
-            ▶ Play
-          </button>
+          <div className="row" style={{ marginTop: 8, gap: 6 }}>
+            <button className="btn sm" onClick={onPlay}>
+              ▶ Play
+            </button>
+            {onNext && (
+              <button className="btn sm" onClick={onNext} title="Skip to the next note">
+                Next ›
+              </button>
+            )}
+          </div>
         </div>
         <div className="grow">
           <div className="label">You</div>

@@ -455,24 +455,6 @@ button:disabled {
 .piano .black .key-label small {
   font-size: 7px;
 }
-/* scale membership = a dot above the label, not a colour wash */
-.piano .in-scale::before {
-  content: "";
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--accent);
-  opacity: 0.85;
-}
-.piano .white.in-scale::before {
-  bottom: 24px;
-}
-.piano .black.in-scale::before {
-  bottom: 18px;
-}
 .piano .white.root {
   background: var(--accent);
 }
@@ -485,9 +467,6 @@ button:disabled {
 .piano .black.root .key-label {
   color: #1a1400;
 }
-.piano .root::before {
-  display: none;
-}
 .piano .white.sounding {
   background: var(--good);
 }
@@ -496,9 +475,6 @@ button:disabled {
 }
 .piano .black.sounding {
   background: #2f9a5a;
-}
-.piano .sounding::before {
-  display: none;
 }
 .piano .white.sung {
   box-shadow: inset 0 -5px 0 0 var(--warn);
