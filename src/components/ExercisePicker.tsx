@@ -1,5 +1,8 @@
 import { useSettings, type AutoAdvance, type IntroMode } from '../state/settings';
 import { SCALES, degreeString, type Direction, type ScaleDef } from '../music/scales';
+import { useHistory } from '../state/historyStore';
+import { bestByExercise } from '../music/history';
+import { useMemo } from 'react';
 
 export const ADVANCE_NEXT: Record<AutoAdvance, AutoAdvance> = { off: 'up', up: 'down', down: 'off' };
 export const ADVANCE_LABEL: Record<AutoAdvance, string> = { off: 'Auto-advance off', up: 'Auto-advance ↑', down: 'Auto-advance ↓' };
@@ -34,6 +37,8 @@ export function ExercisePicker() {
   const set = useSettings((x) => x.set);
   const scale = SCALES.find((sc) => sc.id === playScale) ?? SCALES[0];
   const visible = SCALES.filter((sc) => !hidden.includes(sc.id));
+  const runs = useHistory((h) => h.runs);
+  const best = useMemo(() => bestByExercise(runs), [runs]);
 
   return (
     <section className="card">
@@ -59,7 +64,7 @@ export function ExercisePicker() {
         {visible
           .filter((sc) => !sc.pattern)
           .map((sc) => (
-            <ExerciseChip key={sc.id} sc={sc} on={sc.id === scale.id} onClick={() => set({ playScale: sc.id })} />
+            <ExerciseChip key={sc.id} sc={sc} on={sc.id === scale.id} stars={best.get(sc.id)?.stars ?? 0} onClick={() => set({ playScale: sc.id })} />
           ))}
       </div>
       {visible.some((sc) => sc.pattern) && (
@@ -71,7 +76,7 @@ export function ExercisePicker() {
             {visible
               .filter((sc) => sc.pattern)
               .map((sc) => (
-                <ExerciseChip key={sc.id} sc={sc} on={sc.id === scale.id} onClick={() => set({ playScale: sc.id })} />
+                <ExerciseChip key={sc.id} sc={sc} on={sc.id === scale.id} stars={best.get(sc.id)?.stars ?? 0} onClick={() => set({ playScale: sc.id })} />
               ))}
           </div>
         </>
@@ -81,10 +86,17 @@ export function ExercisePicker() {
 }
 
 /** Chip: name plus the degree pattern (1 2 3 4 5) so it matches how exercises are described online. */
-function ExerciseChip({ sc, on, onClick }: { sc: ScaleDef; on: boolean; onClick: () => void }) {
+function ExerciseChip({ sc, on, stars, onClick }: { sc: ScaleDef; on: boolean; stars: number; onClick: () => void }) {
   return (
     <button className={`chip${on ? ' on' : ''}`} onClick={onClick} style={{ height: 'auto', padding: '5px 10px', flexDirection: 'column', gap: 1, alignItems: 'flex-start' }}>
-      <span style={{ fontSize: 12 }}>{sc.pattern ? sc.short : sc.name}</span>
+      <span style={{ fontSize: 12 }}>
+        {sc.pattern ? sc.short : sc.name}
+        {stars > 0 && (
+          <span style={{ color: 'var(--accent)', marginLeft: 5, fontSize: 10 }} title="Best result">
+            {'★'.repeat(stars)}
+          </span>
+        )}
+      </span>
       <span className="mono" style={{ fontSize: 10, opacity: 0.75, fontWeight: 500 }}>
         {sc.pattern ? sc.name : degreeString(sc)}
       </span>

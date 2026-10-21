@@ -14,6 +14,8 @@ import { RunView, type RunState } from '../components/RunView';
 import { useDisplayNote } from '../state/pitchStore';
 import { historyIndex, historyLength, midis, times } from '../state/pitchHistory';
 import { scoreNote, summarizeRun, type NoteScore, type RunSummary } from '../music/scoring';
+import { useHistory } from '../state/historyStore';
+import { HistoryCard } from '../components/HistoryCard';
 
 const MODE_NEXT: Record<PlayMode, PlayMode> = { along: 'listen', listen: 'along' };
 const MODE_LABEL: Record<PlayMode, string> = { along: 'Sing along', listen: 'Listen, then sing' };
@@ -131,7 +133,21 @@ export function PlayTab() {
       onRunEnd: () => {
         const st = latest.current;
         const scores = runRef.current.scores.map((x) => x ?? ({ cents: NaN, precision: 0, sustain: 0, hit: false, tendency: 'none' } as NoteScore));
-        if (scores.length) setSummary(summarizeRun(scores));
+        if (scores.length) {
+          const sum = summarizeRun(scores);
+          setSummary(sum);
+          void useHistory.getState().log({
+            tab: 'play',
+            exerciseId: st.playScale,
+            root: st.playRoot,
+            bpm: st.bpm,
+            hits: sum.hits,
+            total: sum.total,
+            avgCents: sum.avgCents,
+            precision: sum.precision,
+            sustain: sum.sustain,
+          });
+        }
         const next = nextRoot(st.playRoot);
         if (next === null) {
           setPlaying(false);
@@ -291,6 +307,8 @@ export function PlayTab() {
       <Piano root={s.playRoot} inScale={inScale} sounding={soundingMidi} onKey={onKey} />
 
       <ExercisePicker />
+
+      <HistoryCard tab="play" />
     </>
   );
 }

@@ -48,7 +48,24 @@ export interface TakeRecord {
   trackId?: string | null;
 }
 
+/** One practice result: a Play run or a Tune nailed note. */
+export interface RunRecord {
+  id: string;
+  at: number;
+  tab: 'play' | 'tune';
+  exerciseId: string;
+  root: number;
+  bpm: number;
+  hits: number;
+  total: number;
+  /** Signed average cents, NaN-free (0 when nothing sung). */
+  avgCents: number;
+  precision: number;
+  sustain: number;
+}
+
 interface SingDB extends DBSchema {
+  runs: { key: string; value: RunRecord; indexes: { at: number } };
   tracks: { key: string; value: TrackRecord; indexes: { addedAt: number } };
   trackMeta: { key: string; value: TrackMeta };
   takes: { key: string; value: TakeRecord; indexes: { createdAt: number } };
@@ -58,13 +75,19 @@ let dbp: Promise<IDBPDatabase<SingDB>> | null = null;
 
 function db(): Promise<IDBPDatabase<SingDB>> {
   if (!dbp) {
-    dbp = openDB<SingDB>('singing-practice', 1, {
-      upgrade(d) {
-        const t = d.createObjectStore('tracks', { keyPath: 'id' });
-        t.createIndex('addedAt', 'addedAt');
-        d.createObjectStore('trackMeta', { keyPath: 'trackId' });
-        const k = d.createObjectStore('takes', { keyPath: 'id' });
-        k.createIndex('createdAt', 'createdAt');
+    dbp = openDB<SingDB>('singing-practice', 2, {
+      upgrade(d, oldVersion) {
+        if (oldVersion < 1) {
+          const t = d.createObjectStore('tracks', { keyPath: 'id' });
+          t.createIndex('addedAt', 'addedAt');
+          d.createObjectStore('trackMeta', { keyPath: 'trackId' });
+          const k = d.createObjectStore('takes', { keyPath: 'id' });
+          k.createIndex('createdAt', 'createdAt');
+        }
+        if (oldVersion < 2) {
+          const r = d.createObjectStore('runs', { keyPath: 'id' });
+          r.createIndex('at', 'at');
+        }
       },
     });
   }
@@ -132,6 +155,20 @@ export const storage = {
   async deleteTake(id: string): Promise<void> {
     const d = await db();
     await d.delete('takes', id);
+  },
+  async addRun(run: RunRecord): Promise<void> {
+    const d = await db();
+    await d.put('runs', run);
+  },
+  /** Runs newer than `since` (ms epoch), newest first. */
+  async listRuns(since: number): Promise<RunRecord[]> {
+    const d = await db();
+    const all = await d.getAllFromIndex('runs', 'at', IDBKeyRange.lowerBound(since));
+    return all.reverse();
+  },
+  async clearRuns(): Promise<void> {
+    const d = await db();
+    await d.clear('runs');
   },
   async estimate(): Promise<{ usage: number; quota: number } | null> {
     if (!navigator.storage?.estimate) return null;
