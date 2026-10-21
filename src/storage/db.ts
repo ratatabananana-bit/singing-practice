@@ -15,9 +15,22 @@ export interface TrackRecord {
   blob: Blob;
 }
 
+export interface Section {
+  id: string;
+  name: string;
+  /** Index into SECTION_COLORS. */
+  color: number;
+  start: number;
+  end: number;
+}
+
 export interface TrackMeta {
   trackId: string;
   bookmarks: Bookmark[];
+  /** Named, coloured song parts (Verse, Chorus…) that can be looped directly. */
+  sections?: Section[];
+  /** Section currently looped (takes precedence over the marker pair). */
+  activeSection?: string | null;
   /** Index (in time order) of the marker that starts the loop, or null. */
   activeLoop: number | null;
   /** Index of the marker that ends the loop; defaults to activeLoop + 1 when missing. */

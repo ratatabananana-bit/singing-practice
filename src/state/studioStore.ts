@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { storage, uid, type Bookmark, type TakeRecord, type TrackMeta } from '../storage/db';
+import { storage, uid, type Bookmark, type Section, type TakeRecord, type TrackMeta } from '../storage/db';
 import { trackPlayer, TrackPlayer } from '../audio/player/TrackPlayer';
 import { useSettings } from './settings';
 import { instrument } from '../audio/synth/Instrument';
@@ -24,6 +24,8 @@ export interface StudioState {
   countdown: number;
 
   loadFile: (file: File) => Promise<void>;
+  /** Fetch audio for a YouTube link through the local helper server, then load it like a file. */
+  loadYouTube: (url: string) => Promise<void>;
   loadLast: () => Promise<void>;
   setMeta: (patch: Partial<TrackMeta>) => void;
   addBookmark: (time: number) => void;
@@ -36,6 +38,11 @@ export interface StudioState {
   setActiveLoop: (index: number | null) => void;
   /** Loop between any two markers (time-order indices). */
   setLoopRange: (a: number, b: number) => void;
+  addSection: (s: Omit<Section, 'id'>) => string;
+  updateSection: (id: string, patch: Partial<Section>) => void;
+  removeSection: (id: string) => void;
+  /** Loop a section (seeks to its start); null clears the section loop. */
+  loopSection: (id: string | null) => void;
   setLoopOn: (on: boolean) => void;
   refreshTakes: () => Promise<void>;
   addTake: (take: TakeRecord) => Promise<void>;
@@ -78,8 +85,11 @@ export function loopPair(meta: TrackMeta): [number | null, number | null] {
 
 function applyLoop(meta: TrackMeta) {
   const sorted = [...meta.bookmarks].sort((a, b) => a.time - b.time);
+  const sec = meta.activeSection ? meta.sections?.find((x) => x.id === meta.activeSection) : undefined;
   const [i, j] = loopPair(meta);
-  if (meta.loopOn && i !== null && j !== null && j < sorted.length) {
+  if (meta.loopOn && sec && sec.end > sec.start) {
+    trackPlayer.setLoop(true, sec.start, sec.end);
+  } else if (meta.loopOn && i !== null && j !== null && j < sorted.length) {
     trackPlayer.setLoop(true, sorted[i].time, sorted[j].time);
   } else {
     trackPlayer.setLoop(false, 0, 0);
@@ -122,6 +132,22 @@ export const useStudio = create<StudioState>()((set, get) => ({
     trackPlayer.setFineCents(meta.fineCents ?? 0);
     trackPlayer.setLoopGap(meta.loopGap ?? 0);
     applyLoop(meta);
+  },
+
+  async loadYouTube(url) {
+    set({ busy: true, error: null });
+    try {
+      const base = ytHelperBase();
+      const r = await fetch(`${base}/api/yt?url=${encodeURIComponent(url.trim())}`);
+      if (!r.ok) throw new Error((await r.text()) || `helper replied ${r.status}`);
+      const title = decodeURIComponent(r.headers.get('X-Title') || 'YouTube audio');
+      const ext = r.headers.get('X-Ext') || 'm4a';
+      const blob = await r.blob();
+      await get().loadFile(new File([blob], `${title}.${ext}`, { type: blob.type || 'audio/mp4' }));
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      set({ busy: false, error: /Failed to fetch|NetworkError|502|503/.test(msg) ? 'YouTube helper is not running. On the PC run: npm run server' : `YouTube: ${msg}` });
+    }
   },
 
   async loadLast() {
@@ -208,7 +234,7 @@ export const useStudio = create<StudioState>()((set, get) => ({
   setActiveLoop(index) {
     const meta = get().meta;
     if (!meta) return;
-    const next = { ...meta, activeLoop: index, loopEnd: index !== null ? index + 1 : null, loopOn: index !== null ? true : meta.loopOn };
+    const next = { ...meta, activeLoop: index, loopEnd: index !== null ? index + 1 : null, loopOn: index !== null ? true : meta.loopOn, activeSection: null };
     set({ meta: next });
     persistMeta(next);
     applyLoop(next);
@@ -217,13 +243,48 @@ export const useStudio = create<StudioState>()((set, get) => ({
       if (sorted[index]) trackPlayer.seek(sorted[index].time);
     }
   },
+  addSection(sec) {
+    const meta = get().meta;
+    if (!meta) return '';
+    const id = uid();
+    const next = { ...meta, sections: [...(meta.sections ?? []), { ...sec, id }] };
+    set({ meta: next });
+    persistMeta(next);
+    return id;
+  },
+  updateSection(id, patch) {
+    const meta = get().meta;
+    if (!meta) return;
+    const next = { ...meta, sections: (meta.sections ?? []).map((x) => (x.id === id ? { ...x, ...patch } : x)) };
+    set({ meta: next });
+    persistMeta(next);
+    applyLoop(next);
+  },
+  removeSection(id) {
+    const meta = get().meta;
+    if (!meta) return;
+    const next = { ...meta, sections: (meta.sections ?? []).filter((x) => x.id !== id), activeSection: meta.activeSection === id ? null : meta.activeSection };
+    set({ meta: next });
+    persistMeta(next);
+    applyLoop(next);
+  },
+  loopSection(id) {
+    const meta = get().meta;
+    if (!meta) return;
+    const next = { ...meta, activeSection: id, loopOn: id !== null ? true : meta.loopOn };
+    set({ meta: next });
+    persistMeta(next);
+    applyLoop(next);
+    const sec = id ? next.sections?.find((x) => x.id === id) : undefined;
+    if (sec) trackPlayer.seek(sec.start);
+  },
   setLoopRange(a, b) {
     const meta = get().meta;
     if (!meta) return;
     const lo = Math.min(a, b);
     const hi = Math.max(a, b);
     if (lo === hi) return;
-    const next = { ...meta, activeLoop: lo, loopEnd: hi, loopOn: true };
+    const next = { ...meta, activeLoop: lo, loopEnd: hi, loopOn: true, activeSection: null };
     set({ meta: next });
     persistMeta(next);
     applyLoop(next);
@@ -292,6 +353,13 @@ trackPlayer.onWrap(() => {
   trackPlayer.setSpeed(next / 100);
   st.setMeta({ speed: next / 100 });
 });
+
+/** Helper base URL: same origin in dev (Vite proxies /api), else the PC's address saved in settings. */
+function ytHelperBase(): string {
+  const custom = useSettings.getState().ytHelperUrl.trim();
+  if (custom) return custom.replace(/\/$/, '');
+  return '';
+}
 
 // Remember playback position per track.
 let posTimer = 0;

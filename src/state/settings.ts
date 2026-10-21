@@ -56,6 +56,8 @@ export interface SettingsState {
   autoPlayLastTake: boolean;
   /** Four clicks before recording starts. */
   countIn: boolean;
+  /** Base URL of the yt-dlp helper (empty = same origin / dev proxy), e.g. http://192.168.0.79:5174 */
+  ytHelperUrl: string;
   denoise: boolean;
   /** "In tune" tolerance in cents (Tune tab); the Play pill allows 10 more. */
   toleranceCents: number;
@@ -99,6 +101,7 @@ export const useSettings = create<SettingsState>()(
       pitch: { ...DEFAULT_PITCH_DEBUG },
       autoPlayLastTake: true,
       countIn: true,
+      ytHelperUrl: '',
       denoise: false,
       toleranceCents: 20,
       rangeLow: null,

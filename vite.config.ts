@@ -37,7 +37,11 @@ export default defineConfig({
     }),
   ],
   worker: { format: 'es' },
-  server: { port: 5173 },
+  server: {
+    port: 5173,
+    // `npm run server` (yt-dlp helper) answers /api on 5174.
+    proxy: { '/api': { target: 'http://localhost:5174', changeOrigin: true } },
+  },
   test: {
     environment: 'node',
     include: ['src/**/*.test.ts'],

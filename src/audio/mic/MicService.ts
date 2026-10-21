@@ -157,7 +157,9 @@ class MicService {
   }
 
   toggle(): void {
-    if (this._state === 'running' || this._state === 'starting') this.pause();
+    // A tap while the mic is still starting means "I want it live": leave it alone.
+    if (this._state === 'starting') return;
+    if (this._state === 'running') this.pause();
     else void this.start();
   }
 

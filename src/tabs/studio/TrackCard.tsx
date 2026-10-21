@@ -4,6 +4,7 @@ import { useSettings } from '../../state/settings';
 import { trackPlayer, type PlayerSnapshot } from '../../audio/player/TrackPlayer';
 import { formatTime, formatTimePrecise, parseTime } from '../../music/notes';
 import { LoopTimeline } from '../../components/LoopTimeline';
+import { SectionEditor, SECTION_COLORS } from '../../components/SectionEditor';
 
 export function TrackCard() {
   const st = useStudio();
@@ -12,6 +13,10 @@ export function TrackCard() {
   const [editMarkers, setEditMarkers] = useState(false);
   const [bigTile, setBigTile] = useState<'transpose' | 'speed' | null>(null);
   const [clearArmed, setClearArmed] = useState(false);
+  const [newSection, setNewSection] = useState<{ start: number; end: number } | null>(null);
+  const [editSection, setEditSection] = useState<string | null>(null);
+  const [ytOpen, setYtOpen] = useState(false);
+  const [ytUrl, setYtUrl] = useState('');
   useEffect(() => {
     if (!clearArmed) return;
     const t = setTimeout(() => setClearArmed(false), 3000);
@@ -45,7 +50,9 @@ export function TrackCard() {
   const loopActive = !!meta?.loopOn && loopA !== null && loopB !== null;
   const [pending, setPending] = useState<number | null>(null);
   useEffect(() => setPending(null), [st.track?.id]);
-  const loopLabel = pending !== null ? `${pending + 1}–?` : loopA !== null && loopB !== null ? `${loopA + 1}–${loopB + 1}` : 'Loop';
+  const songSections = meta?.sections ?? [];
+  const activeSec = meta?.activeSection ? songSections.find((x) => x.id === meta.activeSection) : undefined;
+  const loopLabel = pending !== null ? `${pending + 1}–?` : activeSec && meta?.loopOn ? activeSec.name : loopA !== null && loopB !== null ? `${loopA + 1}–${loopB + 1}` : 'Loop';
 
   /**
    * Marker taps: first tap picks the start, second tap (another marker) picks the end.
@@ -95,12 +102,32 @@ export function TrackCard() {
         <button className="btn sm" onClick={() => fileRef.current?.click()} disabled={st.busy}>
           {st.busy ? 'Loading…' : 'Load track'}
         </button>
+        <button className={`btn sm${ytOpen ? ' primary' : ''}`} onClick={() => setYtOpen((o) => !o)} disabled={st.busy} title="Fetch the audio of a YouTube video through the helper on your PC">
+          YouTube link
+        </button>
         {settings.lastTrackId && (!st.track || st.track.id !== settings.lastTrackId) && (
           <button className="btn sm" onClick={() => void st.loadLast()} disabled={st.busy}>
             Select last track
           </button>
         )}
       </div>
+      {ytOpen && (
+        <form
+          className="row"
+          style={{ marginTop: 8 }}
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (ytUrl.trim()) {
+              void st.loadYouTube(ytUrl).then(() => setYtOpen(false));
+            }
+          }}
+        >
+          <input type="text" className="grow" inputMode="url" placeholder="https://youtube.com/watch?v=…" value={ytUrl} onChange={(e) => setYtUrl(e.target.value)} style={{ minHeight: 40 }} />
+          <button className="btn sm primary" type="submit" disabled={st.busy || !ytUrl.trim()}>
+            {st.busy ? 'Fetching…' : 'Load'}
+          </button>
+        </form>
+      )}
       {st.error && (
         <div className="banner bad" style={{ marginTop: 8 }} onClick={() => st.setError(null)}>
           {st.error}
@@ -215,25 +242,31 @@ export function TrackCard() {
             onSeek={(sec) => trackPlayer.seek(sec)}
             onMoveMarker={(id, sec) => st.updateBookmark(id, { time: sec })}
             onSelectMarker={selectMarker}
+            sections={songSections}
+            activeSection={meta.loopOn ? (meta.activeSection ?? null) : null}
+            onSelectSection={(id) => st.loopSection(meta.activeSection === id && meta.loopOn ? null : id)}
           />
           <div className="row between" style={{ marginTop: 4 }}>
             <div className="row" style={{ gap: 6 }}>
               <button className="tool" onClick={() => st.addBookmark(trackPlayer.estimatePosition())} title="Add marker at playhead">
                 +
               </button>
+              <button
+                className="tool"
+                disabled={!(loopActive || (loopA !== null && loopB !== null))}
+                onClick={() => {
+                  const sec = activeSec && meta.loopOn ? { start: activeSec.start, end: activeSec.end } : loopA !== null && loopB !== null ? { start: sorted[loopA].time, end: sorted[loopB].time } : null;
+                  if (sec) setNewSection(sec);
+                }}
+                title="Save the current loop as a named, coloured section"
+                style={{ width: 'auto', padding: '0 10px', fontSize: 12 }}
+              >
+                + Section
+              </button>
               <button className={`tool${meta.loopOn ? ' on' : ''}`} onClick={() => st.setLoopOn(!meta.loopOn)} disabled={sections === 0} title="Loop on/off">
                 ⟲
               </button>
-              <button
-                className={`tool${snap.loopGap > 0 ? ' on' : ''}`}
-                onClick={() => setGap(snap.loopGap >= 2 ? 0 : snap.loopGap + 1)}
-                disabled={sections === 0}
-                title="Pause before the loop restarts: 0 / 1 / 2 s"
-                style={{ width: 'auto', padding: '0 8px', fontSize: 11 }}
-              >
-                gap {snap.loopGap}s
-              </button>
-              <button className={`tool${editMarkers ? ' on' : ''}`} onClick={() => setEditMarkers((v) => !v)} disabled={sorted.length === 0} title="Edit markers">
+              <button className={`tool${editMarkers ? ' on' : ''}`} onClick={() => setEditMarkers((v) => !v)} disabled={sorted.length === 0 && songSections.length === 0} title="Edit markers and sections">
                 ✎
               </button>
             </div>
@@ -252,8 +285,72 @@ export function TrackCard() {
               {clearArmed ? 'Clear all markers?' : '✕'}
             </button>
           </div>
+          {newSection && (
+            <div style={{ marginTop: 8 }}>
+              <SectionEditor
+                initial={{ name: '', color: songSections.length % SECTION_COLORS.length }}
+                start={newSection.start}
+                end={newSection.end}
+                onCancel={() => setNewSection(null)}
+                onSave={(d) => {
+                  const id = st.addSection({ ...d, start: newSection.start, end: newSection.end });
+                  setNewSection(null);
+                  st.loopSection(id);
+                }}
+              />
+            </div>
+          )}
+          {songSections.length > 0 && (
+            <div className="chips scroll" style={{ marginTop: 8 }}>
+              {songSections.map((sec) => {
+                const on = meta.loopOn && meta.activeSection === sec.id;
+                return (
+                  <button
+                    key={sec.id}
+                    className="chip"
+                    onClick={() => (editMarkers ? setEditSection(editSection === sec.id ? null : sec.id) : st.loopSection(on ? null : sec.id))}
+                    style={{
+                      minHeight: 40,
+                      borderColor: SECTION_COLORS[sec.color],
+                      background: on ? SECTION_COLORS[sec.color] : 'var(--card2)',
+                      color: on ? '#111' : 'var(--text)',
+                    }}
+                    title={editMarkers ? 'Edit section' : 'Loop this section'}
+                  >
+                    {sec.name}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+          {editMarkers && editSection && songSections.find((x) => x.id === editSection) && (
+            <div style={{ marginTop: 8 }}>
+              {(() => {
+                const sec = songSections.find((x) => x.id === editSection)!;
+                return (
+                  <SectionEditor
+                    key={sec.id}
+                    initial={{ name: sec.name, color: sec.color }}
+                    start={sec.start}
+                    end={sec.end}
+                    onSave={(d) => {
+                      st.updateSection(sec.id, d);
+                      setEditSection(null);
+                    }}
+                    onCancel={() => setEditSection(null)}
+                    onDelete={() => {
+                      st.removeSection(sec.id);
+                      setEditSection(null);
+                    }}
+                    onRepinStart={() => st.updateSection(sec.id, { start: Math.min(trackPlayer.estimatePosition(), sec.end - 0.1) })}
+                    onRepinEnd={() => st.updateSection(sec.id, { end: Math.max(trackPlayer.estimatePosition(), sec.start + 0.1) })}
+                  />
+                );
+              })()}
+            </div>
+          )}
           {sorted.length === 0 ? (
-            <div className="empty">Tap + to drop a marker at the playhead. Then tap a start marker and an end marker to loop between them.</div>
+            <div className="empty">Tap + to drop a marker at the playhead. Tap a start marker and an end marker to loop between them, then "+ Section" to name and colour that loop.</div>
           ) : (
             <div className="chips scroll" style={{ marginTop: 8 }}>
               {sorted.map((m, i) => {
@@ -270,6 +367,18 @@ export function TrackCard() {
                   </button>
                 );
               })}
+            </div>
+          )}
+          {editMarkers && sorted.length > 0 && (
+            <div className="row between" style={{ marginTop: 8, fontSize: 12 }}>
+              <span className="muted">Pause before the loop restarts</span>
+              <div className="seg">
+                {[0, 1, 2].map((g) => (
+                  <button key={g} className={snap.loopGap === g ? 'on' : ''} onClick={() => setGap(g)}>
+                    {g}s
+                  </button>
+                ))}
+              </div>
             </div>
           )}
           {editMarkers && sorted.length > 0 && (

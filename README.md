@@ -8,7 +8,7 @@ Not a karaoke app: no songs, lyrics or scoring against tracks.
 
 - **Play**: exercise player with degree-labelled scales and vocal patterns, intro cue, auto-advance within a vocal range (turn around / stop at the edge, sing-to-find range), listen-then-sing mode, gap between runs, a run view with target blocks + sung trace + per-note hit colours, and an end-of-run score (hits, avg cents, precision, sustain, flat/sharp). Modelled on Singing Carrots, Erol Singer's Studio, Warm Vox.
 - **Tune**: tap-a-key target tuner with adjustable tolerance (default 20¢), cents + note + Hz readout, cents graph with note-labelled rows, hold-to-nail with steadiness, session bias (precise / flat / sharp, average, steadiness), key guess, and the same exercise mode as Play. Modelled on Vocal Pitch Monitor, Sing-inTuna, Cleartune, Singing Carrots.
-- **Studio**: Transpose-style marker timeline with A–B loops between any two markers, gapless looping with an optional gap, speed 25–200% and transpose ±12 st plus ±50¢ fine tune, speed trainer (ramp per loop pass), count-in before recording, takes with waveform, star (kept + drawn as a reference line under the live pitch while the track plays), WAV export, offline denoise. Modelled on Transpose, Anytune, Capo, GarageBand, Voloco.
+- **Studio**: Transpose-style marker timeline with A–B loops between any two markers, named coloured sections (Verse, Chorus…) that loop with one tap, YouTube import via a local yt-dlp helper, gapless looping with an optional gap, speed 25–200% and transpose ±12 st plus ±50¢ fine tune, speed trainer (ramp per loop pass), count-in before recording, takes with waveform, star (kept + drawn as a reference line under the live pitch while the track plays), WAV export, offline denoise. Modelled on Transpose, Anytune, Capo, GarageBand, Voloco.
 
 ## Stack
 
@@ -32,6 +32,16 @@ npm run preview    # serve the production build
 ```
 
 The audio side (worklets) does not always hot-reload cleanly: reload the page after changing files under `src/audio/`.
+
+### YouTube helper (optional)
+
+"YouTube link" in Studio asks a small local helper to fetch the audio with yt-dlp + ffmpeg (both must be on PATH):
+
+```bash
+npm run server      # http://localhost:5174, GET /api/yt?url=…
+```
+
+The dev server proxies `/api` to it. From a phone, set Settings → YouTube helper to the PC address (http://<pc-ip>:5174). Downloading YouTube audio may be against YouTube's terms; use it for your own practice.
 
 ### Mobile (Capacitor)
 

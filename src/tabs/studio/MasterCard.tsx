@@ -105,7 +105,7 @@ export function MasterCard() {
           <span className="label">Master</span>
           <CompactTuner />
         </div>
-        <button className={`pill sm ${statusCls}`} onClick={() => (status === 'REPLAY' ? takePlayer.pause() : mic.toggle())}>
+        <button data-mic-toggle className={`pill sm ${statusCls}`} onClick={() => (status === 'REPLAY' ? takePlayer.pause() : mic.toggle())}>
           {status}
         </button>
       </div>

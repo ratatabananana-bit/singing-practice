@@ -30,9 +30,12 @@ export function App() {
   // Mic permission and audio contexts need a user gesture on some platforms:
   // start both on the first tap anywhere.
   useEffect(() => {
-    const onFirst = () => {
+    const onFirst = (e: PointerEvent) => {
       void unlockAudio();
-      if (mic.state === 'idle') void mic.start();
+      // The LIVE/PAUSED pill handles the mic itself; starting it here too would make
+      // that first tap start-then-pause.
+      const onMicPill = (e.target as HTMLElement | null)?.closest?.('[data-mic-toggle]');
+      if (mic.state === 'idle' && !onMicPill) void mic.start();
       if (useSettings.getState().sound === 'piano') instrument.preloadAll();
       window.removeEventListener('pointerdown', onFirst);
     };

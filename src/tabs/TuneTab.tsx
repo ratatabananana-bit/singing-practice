@@ -310,7 +310,7 @@ function TunerCard({
       <div className="row between">
         <div className="row">
           <span className="label">Target</span>
-          <button className={`pill sm ${micState === 'running' ? 'good' : micState === 'starting' ? 'warn' : 'ghost'}`} onClick={() => mic.toggle()}>
+          <button data-mic-toggle className={`pill sm ${micState === 'running' ? 'good' : micState === 'starting' ? 'warn' : 'ghost'}`} onClick={() => mic.toggle()}>
             {micState === 'running' ? 'LIVE' : micState === 'starting' ? '…' : 'PAUSED'}
           </button>
         </div>
@@ -370,6 +370,11 @@ function TunerCard({
         <span className="pill sm ghost mono">
           hold {(live.hold * st.holdSeconds).toFixed(1)}s / {st.holdSeconds.toFixed(1)}s
         </span>
+      </div>
+      <div className="dim" style={{ fontSize: 11, marginTop: 6 }}>
+        {progress
+          ? 'Tap a key to pick the starting note. Sing each note of the sequence; hold it in tune to move to the next.'
+          : 'Tap a key to pick the target. Sing it and hold it in tune for the bar to fill.'}
       </div>
     </section>
   );

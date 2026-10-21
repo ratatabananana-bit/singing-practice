@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
-import type { Bookmark } from '../storage/db';
+import type { Bookmark, Section } from '../storage/db';
+import { SECTION_COLORS } from './SectionEditor';
 
 /**
  * Track timeline with numbered markers (sorted by time), the active loop span shaded,
@@ -16,6 +17,9 @@ export function LoopTimeline({
   onSeek,
   onMoveMarker,
   onSelectMarker,
+  sections = [],
+  activeSection = null,
+  onSelectSection,
 }: {
   duration: number;
   /** Sorted by time. */
@@ -30,6 +34,9 @@ export function LoopTimeline({
   onSeek: (sec: number) => void;
   onMoveMarker: (id: string, sec: number) => void;
   onSelectMarker: (index: number) => void;
+  sections?: Section[];
+  activeSection?: string | null;
+  onSelectSection?: (id: string) => void;
 }) {
   const bar = useRef<HTMLDivElement>(null);
   const head = useRef<HTMLDivElement>(null);
@@ -80,6 +87,20 @@ export function LoopTimeline({
       {a && b && (
         <div className={`timeline-loop${loopOn ? ' on' : ''}`} style={{ left: `${pct(a.time)}%`, width: `${pct(b.time) - pct(a.time)}%` }} />
       )}
+      {sections.map((sec) => (
+        <button
+          key={sec.id}
+          className={`timeline-section${sec.id === activeSection ? ' on' : ''}`}
+          style={{ left: `${pct(sec.start)}%`, width: `${Math.max(1, pct(sec.end) - pct(sec.start))}%`, background: SECTION_COLORS[sec.color] }}
+          onPointerDown={(e) => {
+            e.stopPropagation();
+            onSelectSection?.(sec.id);
+          }}
+          title={sec.name}
+        >
+          {sec.name}
+        </button>
+      ))}
       <div className="timeline-head" ref={head} />
       {markers.map((m, i) => (
         <button

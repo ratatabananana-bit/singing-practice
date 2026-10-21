@@ -994,3 +994,27 @@ span.pill.sm {
   min-width: 36px;
   justify-content: center;
 }
+.timeline-section {
+  position: absolute;
+  top: 36px;
+  height: 12px;
+  border-radius: 3px;
+  opacity: 0.55;
+  color: #111;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 12px;
+  padding: 0 4px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  text-align: left;
+  touch-action: none;
+}
+.timeline-section.on {
+  opacity: 1;
+  box-shadow: 0 0 0 2px #fff;
+}
+.timeline {
+  height: 52px;
+}

@@ -134,6 +134,12 @@ export function SettingsSheet({ onClose }: { onClose: () => void }) {
           </div>
 
           <div className="setting">
+            <div className="title">YouTube helper</div>
+            <div className="desc">Runs on your PC (npm run server). Leave empty on the PC; on a phone enter the PC address, e.g. http://192.168.0.79:5174</div>
+            <input type="text" inputMode="url" placeholder="http://<pc-ip>:5174" value={s.ytHelperUrl} onChange={(e) => s.set({ ytHelperUrl: e.target.value })} style={{ minHeight: 40 }} />
+          </div>
+
+          <div className="setting">
             <button className="row between" style={{ width: '100%' }} onClick={() => setDebugOpen((o) => !o)}>
               <span className="title">Debug: pitch detection</span>
               <span className="muted">{debugOpen ? '▴' : '▾'}</span>
