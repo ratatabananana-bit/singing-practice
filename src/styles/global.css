@@ -409,12 +409,12 @@ button:disabled {
 }
 .piano {
   position: relative;
-  height: 150px;
+  height: 110px;
   display: flex;
 }
 .piano .white {
   flex: none;
-  width: 46px;
+  width: 36px;
   height: 100%;
   background: #ececf0;
   border-right: 1px solid #b4b4bc;
@@ -423,11 +423,11 @@ button:disabled {
   display: flex;
   align-items: flex-end;
   justify-content: center;
-  padding-bottom: 10px;
+  padding-bottom: 6px;
   user-select: none;
 }
 .piano .white .key-label {
-  font-size: 12px;
+  font-size: 10px;
   white-space: nowrap;
   line-height: 1;
   font-weight: 600;
@@ -437,8 +437,8 @@ button:disabled {
 .piano .black {
   position: absolute;
   top: 0;
-  width: 30px;
-  height: 58%;
+  width: 24px;
+  height: 60%;
   background: #1a1a1f;
   border: 1px solid #000;
   border-radius: 0 0 3px 3px;
@@ -450,7 +450,7 @@ button:disabled {
   padding-bottom: 4px;
 }
 .piano .black .key-label {
-  font-size: 9px;
+  font-size: 8px;
   white-space: nowrap;
   color: #8a8a94;
   font-family: var(--mono);
@@ -1067,5 +1067,23 @@ span.pill.sm {
   }
   .header h1 {
     font-size: 20px;
+  }
+  /* tablet keyboard: bigger keys and labels; phones keep the original sizes */
+  .piano {
+    height: 150px;
+  }
+  .piano .white {
+    width: 46px;
+    padding-bottom: 10px;
+  }
+  .piano .white .key-label {
+    font-size: 12px;
+  }
+  .piano .black {
+    width: 30px;
+    height: 58%;
+  }
+  .piano .black .key-label {
+    font-size: 9px;
   }
 }

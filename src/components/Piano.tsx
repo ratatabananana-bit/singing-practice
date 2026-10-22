@@ -1,10 +1,14 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { isSharp, noteLabel, noteName, octaveOf } from '../music/notes';
 
 export const PIANO_LO = 24; // C1
 export const PIANO_HI = 96; // C7
-const WHITE_W = 46;
-const BLACK_W = 30;
+// Key geometry must match global.css (.piano .white / .black), phone vs tablet.
+const TABLET = '(min-width: 760px)';
+function keyWidths(): { white: number; black: number } {
+  const t = typeof window !== 'undefined' && window.matchMedia(TABLET).matches;
+  return t ? { white: 46, black: 30 } : { white: 36, black: 24 };
+}
 const TAP_SLOP = 6; // px of movement before a press becomes a drag
 
 export interface PianoProps {
@@ -16,6 +20,17 @@ export interface PianoProps {
   onKey: (midi: number) => void;
   /** Note to keep in view (defaults to root). Only scrolls when it is off-screen. */
   center?: number | null;
+}
+
+function useKeyWidths(): { white: number; black: number } {
+  const [w, setW] = useState(keyWidths);
+  useEffect(() => {
+    const mq = window.matchMedia(TABLET);
+    const on = () => setW(keyWidths());
+    mq.addEventListener('change', on);
+    return () => mq.removeEventListener('change', on);
+  }, []);
+  return w;
 }
 
 function whiteIndex(midi: number): number {
@@ -32,6 +47,7 @@ function whiteIndex(midi: number): number {
  * pointer did not move. The view only auto-scrolls when the target note is out of view.
  */
 export function Piano({ root = null, inScale, sounding = null, sung = null, onKey, center }: PianoProps) {
+  const { white: WHITE_W, black: BLACK_W } = useKeyWidths();
   const wrap = useRef<HTMLDivElement>(null);
   const target = center ?? root;
   const firstScroll = useRef(true);
@@ -52,7 +68,7 @@ export function Piano({ root = null, inScale, sounding = null, sung = null, onKe
     const left = Math.max(0, x - el.clientWidth / 2);
     el.scrollTo({ left, behavior: firstScroll.current ? 'auto' : 'smooth' });
     firstScroll.current = false;
-  }, [target]);
+  }, [target, WHITE_W]);
 
   const keys: { midi: number; black: boolean; x: number }[] = [];
   let wi = 0;
