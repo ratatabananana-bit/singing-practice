@@ -1043,3 +1043,39 @@ span.pill.sm {
 .strip .btn {
   white-space: nowrap;
 }
+
+/* ---- tablet / desktop: two columns per tab ---- */
+.cols,
+.col {
+  display: contents;
+}
+@media (min-width: 760px) {
+  .app {
+    max-width: 1100px;
+  }
+  .content {
+    padding: 0 16px 16px;
+  }
+  .cols {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+  }
+  .col {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    flex: 1 1 0;
+    min-width: 0;
+  }
+  .col > * {
+    flex: none;
+  }
+  .header {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+  .header h1 {
+    font-size: 20px;
+  }
+}

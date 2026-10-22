@@ -29,17 +29,20 @@ function run(cmd, args) {
 async function fetchAudio(url) {
   const dir = mkdtempSync(join(tmpdir(), 'sing-yt-'));
   try {
-    // Title first (cheap), then audio as m4a (no re-encode when YouTube serves AAC).
+    // Title first (cheap), then audio as MP3: every browser and the Android WebView decode it
+    // (some m4a variants such as HE-AAC fail in decodeAudioData).
     const title = (await run(YTDLP, ['--no-playlist', '--print', '%(title)s', url])).trim();
     await run(YTDLP, [
       '--no-playlist',
       '-f',
-      'bestaudio[ext=m4a]/bestaudio',
+      'bestaudio/best',
       '-x',
       '--audio-format',
-      'm4a',
+      'mp3',
       '--audio-quality',
-      '0',
+      '2',
+      '--postprocessor-args',
+      'ffmpeg:-ar 44100 -ac 2',
       '-o',
       join(dir, 'audio.%(ext)s'),
       url,

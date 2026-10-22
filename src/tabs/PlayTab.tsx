@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSettings, totalLatencyMs, type PlayMode, type RunGap } from '../state/settings';
-import { SCALES, SCALE_BY_ID, buildSequence, degreeLabel, degreeString, isInScale, turnIndex } from '../music/scales';
+import { SCALES, SCALE_BY_ID, buildSequence, degreeLabel, isInScale, turnIndex } from '../music/scales';
 import { ExercisePicker, RunOptionPills } from '../components/ExercisePicker';
 import { centsOff, noteLabel, noteName, octaveOf, clampMidi } from '../music/notes';
 import { Sequencer, type ScheduledNote } from '../audio/sequencer';
@@ -33,6 +33,7 @@ export function PlayTab() {
   const [listening, setListening] = useState(false);
   const [summary, setSummary] = useState<RunSummary | null>(null);
   const [edgeNote, setEdgeNote] = useState<string | null>(null);
+  const [session, setSession] = useState<SessionAgg>({ byExercise: {}, byNote: {} });
   const seqRef = useRef<Sequencer | null>(null);
   const runRef = useRef<RunState>({ notes: [], scores: [], latency: 0, start: 0, end: 0, listenPass: false });
   const scoreTimers = useRef<number[]>([]);
@@ -131,7 +132,36 @@ export function PlayTab() {
       onRunEnd: () => {
         const st = latest.current;
         const scores = runRef.current.scores.map((x) => x ?? ({ cents: NaN, precision: 0, sustain: 0, hit: false, tendency: 'none' } as NoteScore));
-        if (scores.length) setSummary(summarizeRun(scores));
+        if (scores.length) {
+          setSummary(summarizeRun(scores));
+          const notes = runRef.current.notes;
+          setSession((prev) => {
+            const byExercise = { ...prev.byExercise };
+            const byNote = { ...prev.byNote };
+            const ex = byExercise[st.playScale] ?? { runs: 0, hits: 0, total: 0, centsSum: 0, centsN: 0 };
+            ex.runs += 1;
+            scores.forEach((sc, i) => {
+              ex.total += 1;
+              if (sc.hit) ex.hits += 1;
+              if (!Number.isNaN(sc.cents)) {
+                ex.centsSum += sc.cents;
+                ex.centsN += 1;
+              }
+              const midi = notes[i]?.midi;
+              if (midi === undefined) return;
+              const n = byNote[midi] ?? { hits: 0, total: 0, centsSum: 0, centsN: 0 };
+              n.total += 1;
+              if (sc.hit) n.hits += 1;
+              if (!Number.isNaN(sc.cents)) {
+                n.centsSum += sc.cents;
+                n.centsN += 1;
+              }
+              byNote[midi] = { ...n };
+            });
+            byExercise[st.playScale] = { ...ex };
+            return { byExercise, byNote };
+          });
+        }
         const next = nextRoot(st.playRoot);
         if (next === null) {
           setPlaying(false);
@@ -200,7 +230,8 @@ export function PlayTab() {
   const now = useCallback(() => getAudioContext().currentTime, []);
 
   return (
-    <>
+    <div className="cols">
+      <div className="col">
       <section className="card">
         <div className="row between">
           <div className="row" style={{ gap: 8 }}>
@@ -241,16 +272,12 @@ export function PlayTab() {
           ))}
           {turn >= 0 && <span className={`chip sm${step > turn ? ' on' : ''}`}>↩</span>}
         </div>
-        <div className="dim" style={{ fontSize: 11, marginTop: 6 }}>
-          {listening ? 'Listen…' : scale.pattern ? scale.short : degreeString(scale)}
-          {!listening && turn >= 0 ? ' and back' : ''}
-          {!listening && (scale.holdBeats ?? 1) > 1 ? ` · ${scale.holdBeats} beats per note, slide between` : ''}
-        </div>
         <div style={{ marginTop: 8 }}>
           <RunView run={runRef} now={now} height={120} />
         </div>
-        {(summary || edgeNote || introMidi !== null) && (
+        {(summary || edgeNote || introMidi !== null || listening) && (
           <div className="row wrap" style={{ marginTop: 8, gap: 6 }}>
+            {listening && <span className="pill sm accent">Listen…</span>}
             {summary && (
               <>
                 <span className={`pill sm ${summary.hits === summary.total ? 'good' : summary.hits >= summary.total / 2 ? 'warn' : 'bad'} mono`}>
@@ -288,18 +315,91 @@ export function PlayTab() {
       </div>
 
       <Piano root={s.playRoot} inScale={inScale} sounding={soundingMidi} onKey={onKey} />
+      </div>
 
+      <div className="col">
       <ExercisePicker />
-    </>
+      <SessionStats stats={session} onClear={() => setSession({ byExercise: {}, byNote: {} })} />
+      </div>
+    </div>
+  );
+}
+
+interface SessionAgg {
+  byExercise: Record<string, { runs: number; hits: number; total: number; centsSum: number; centsN: number }>;
+  byNote: Record<number, { hits: number; total: number; centsSum: number; centsN: number }>;
+}
+
+/** Per-session results: how each exercise went, and which notes keep drifting. Not persisted. */
+function SessionStats({ stats, onClear }: { stats: SessionAgg; onClear: () => void }) {
+  const tol = useSettings((x) => x.toleranceCents) + 10;
+  const exercises = Object.entries(stats.byExercise);
+  const notes = Object.entries(stats.byNote)
+    .map(([m, v]) => ({ midi: Number(m), ...v }))
+    .sort((a, b) => a.midi - b.midi);
+  const fmtCents = (sum: number, n: number) => (n ? `${sum / n >= 0 ? '+' : '−'}${Math.abs(Math.round(sum / n))}¢` : '—');
+  return (
+    <section className="card">
+      <div className="row between">
+        <span className="label">This session</span>
+        {exercises.length > 0 && (
+          <button className="chip sm" onClick={onClear}>
+            clear
+          </button>
+        )}
+      </div>
+      {exercises.length === 0 ? (
+        <div className="empty">Finish a run and your results per exercise and per note show here.</div>
+      ) : (
+        <>
+          <div className="list" style={{ marginTop: 8 }}>
+            {exercises.map(([id, e]) => {
+              const sc = SCALE_BY_ID[id as keyof typeof SCALE_BY_ID];
+              const pct = e.total ? Math.round((100 * e.hits) / e.total) : 0;
+              return (
+                <div key={id} className="list-item" style={{ fontSize: 12 }}>
+                  <span className="grow" style={{ fontWeight: 600 }}>
+                    {sc ? (sc.pattern ? sc.short : sc.name) : id}
+                    <span className="dim mono" style={{ marginLeft: 6 }}>
+                      {e.runs} run{e.runs === 1 ? '' : 's'}
+                    </span>
+                  </span>
+                  <span className={`pill sm ${pct >= 80 ? 'good' : pct >= 50 ? 'warn' : 'bad'} mono`}>{pct}% hit</span>
+                  <span className="pill sm ghost mono">avg {fmtCents(e.centsSum, e.centsN)}</span>
+                </div>
+              );
+            })}
+          </div>
+          <div className="label" style={{ marginTop: 10 }}>
+            Notes · average error
+          </div>
+          <div className="chips" style={{ marginTop: 6 }}>
+            {notes.map((n) => {
+              const avg = n.centsN ? n.centsSum / n.centsN : NaN;
+              const bad = Number.isNaN(avg) ? n.total > 0 : Math.abs(avg) > tol;
+              const meh = !bad && !Number.isNaN(avg) && Math.abs(avg) > tol / 2;
+              return (
+                <span key={n.midi} className={`chip sm`} style={{ borderColor: bad ? 'var(--bad)' : meh ? 'var(--warn)' : 'var(--good)', color: bad ? 'var(--bad)' : meh ? 'var(--warn)' : 'var(--good)' }} title={`${n.hits}/${n.total} hit`}>
+                  {noteLabel(n.midi)}
+                  <span className="mono" style={{ marginLeft: 5 }}>
+                    {Number.isNaN(avg) ? 'silent' : fmtCents(n.centsSum, n.centsN)}
+                  </span>
+                </span>
+              );
+            })}
+          </div>
+        </>
+      )}
+    </section>
   );
 }
 
 /** "Sing: E4" target readout so a beginner always knows which note to aim for. */
 function SingTarget({ target }: { target: number | null }) {
   return (
-    <span className="row" style={{ gap: 6, fontSize: 11 }}>
+    <span className="row" style={{ gap: 6, fontSize: 12 }}>
       <span className="dim">Sing</span>
-      <span className="mono" style={{ fontWeight: 700, minWidth: 30, textAlign: 'right', color: target === null ? 'var(--dim)' : 'var(--accent)' }}>
+      <span className="mono" style={{ fontWeight: 700, width: 34, textAlign: 'left', color: target === null ? 'var(--dim)' : 'var(--accent)' }}>
         {target === null ? '—' : noteLabel(target)}
       </span>
     </span>

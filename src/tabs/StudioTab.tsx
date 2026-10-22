@@ -4,10 +4,14 @@ import { TakesList } from './studio/TakesList';
 
 export function StudioTab() {
   return (
-    <>
-      <TrackCard />
-      <MasterCard />
-      <TakesList />
-    </>
+    <div className="cols">
+      <div className="col">
+        <TrackCard />
+      </div>
+      <div className="col">
+        <MasterCard />
+        <TakesList />
+      </div>
+    </div>
   );
 }

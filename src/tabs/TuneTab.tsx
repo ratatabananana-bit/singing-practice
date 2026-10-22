@@ -94,7 +94,8 @@ export function TuneTab() {
   const chipNotes = s.playDirection === 'down' && !scale.pattern ? [...scale.exercise].reverse() : scale.exercise;
 
   return (
-    <>
+    <div className="cols">
+      <div className="col">
       <TunerCard
         target={target}
         onNailed={onNailed}
@@ -141,6 +142,8 @@ export function TuneTab() {
         </section>
       )}
 
+      </div>
+      <div className="col">
       <Piano root={s.tuneTarget} sounding={scaleMode ? target : null} sung={sungMidi} inScale={inScale} onKey={onKey} />
 
       {scaleMode && <ExercisePicker />}
@@ -175,7 +178,8 @@ export function TuneTab() {
           </div>
         )}
       </section>
-    </>
+      </div>
+    </div>
   );
 }
 
