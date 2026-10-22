@@ -1055,11 +1055,14 @@ span.pill.sm {
   display: contents;
 }
 @media (min-width: 760px) {
+  /* Tablet mode: fill the width and scale the whole UI up, like tablet builds of music apps. */
   .app {
-    max-width: 760px;
+    max-width: none;
+    zoom: 1.2;
   }
   .content {
-    padding: 0 16px 16px;
+    padding: 0 20px 20px;
+    gap: 12px;
   }
   .header {
     padding-left: 16px;

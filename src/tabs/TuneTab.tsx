@@ -12,6 +12,7 @@ import { LoudnessMeter, loudnessStatus } from '../components/LoudnessMeter';
 import { useDisplayMidi, useMicState } from '../state/pitchStore';
 import { Median3 } from '../audio/pitch/tracker';
 import { smoothTrace } from '../components/traceSmooth';
+import { useTablet } from '../state/useTablet';
 import { steadiness } from '../music/scoring';
 import { RangePill } from '../components/RangeControl';
 
@@ -212,6 +213,8 @@ function TunerCard({
   onNext?: () => void;
 }) {
   const { state: micState } = useMicState();
+  const tablet = useTablet();
+  const graphH = tablet ? 200 : 150;
   const [live, setLive] = useState<Live>(QUIET);
   const [keyGuess, setKeyGuess] = useState<KeyGuess | null>(null);
   const histT = useRef<number[]>([]);
@@ -365,8 +368,8 @@ function TunerCard({
         </div>
       </div>
       <div className="row" style={{ marginTop: 10, alignItems: 'stretch' }}>
-        <TuneGraph histT={histT} histC={histC} target={target} tolerance={tolerance} />
-        <LoudnessMeter db={live.db} height={150} />
+        <TuneGraph histT={histT} histC={histC} target={target} tolerance={tolerance} height={graphH} />
+        <LoudnessMeter db={live.db} height={graphH} />
       </div>
       <div className="row wrap" style={{ marginTop: 8 }}>
         <span className={`pill sm ${statusCls}`}>{tuneStatus}</span>
@@ -385,7 +388,7 @@ function TunerCard({
 }
 
 /** Scrolling cents-deviation graph (~7 s). Holds the last value when silent. */
-function TuneGraph({ histT, histC, target, tolerance }: { histT: React.RefObject<number[]>; histC: React.RefObject<number[]>; target: number; tolerance: number }) {
+function TuneGraph({ histT, histC, target, tolerance, height }: { histT: React.RefObject<number[]>; histC: React.RefObject<number[]>; target: number; tolerance: number; height: number }) {
   const ref = useRef<HTMLCanvasElement>(null);
   const targetRef = useRef(target);
   targetRef.current = target;
@@ -481,7 +484,7 @@ function TuneGraph({ histT, histC, target, tolerance }: { histT: React.RefObject
     draw();
     return () => cancelAnimationFrame(raf);
   }, [histT, histC]);
-  return <canvas ref={ref} className="graph grow" style={{ height: 150 }} />;
+  return <canvas ref={ref} className="graph grow" style={{ height }} />;
 }
 
 /** Flat / sharp / precise counts for the session (the diagnostic Singing Carrots users praise). */

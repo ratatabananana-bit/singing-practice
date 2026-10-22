@@ -15,11 +15,13 @@ import { NoteSlots } from '../../components/NoteSlots';
 import { useDisplayNote, useMicState } from '../../state/pitchStore';
 import { usePitchSelector } from '../../state/pitchStore';
 import { uid } from '../../storage/db';
+import { useTablet } from '../../state/useTablet';
 
 export function MasterCard() {
   const st = useStudio();
   const settings = useSettings();
   const { state: micState } = useMicState();
+  const tablet = useTablet();
   const [takePlaying, setTakePlaying] = useState(false);
   useEffect(() => takePlayer.subscribe((s) => setTakePlaying(s.playing)), []);
 
@@ -112,8 +114,8 @@ export function MasterCard() {
         </button>
       </div>
       <div className="row" style={{ marginTop: 8, alignItems: 'stretch' }}>
-        <PianoRollGraph speed={settings.graphSpeed} replay={takePlaying ? replay : null} reference={reference} now={() => getAudioContext().currentTime} height={300} />
-        <MasterMeter />
+        <PianoRollGraph speed={settings.graphSpeed} replay={takePlaying ? replay : null} reference={reference} now={() => getAudioContext().currentTime} height={tablet ? 380 : 300} />
+        <MasterMeter height={tablet ? 380 : 300} />
       </div>
       <div className="divider" />
       <div className="row between">
@@ -160,7 +162,7 @@ function CompactTuner() {
 }
 
 /** Loudness meter with peak hold and CLIP badge. */
-function MasterMeter() {
+function MasterMeter({ height }: { height: number }) {
   const db = usePitchSelector((f) => Math.round(f.db));
   const peak = usePitchSelector((f) => f.peak);
   const hold = useRef({ peakDb: -120, at: 0, clipAt: 0 });
@@ -169,5 +171,5 @@ function MasterMeter() {
   if (peakDb >= hold.current.peakDb || now - hold.current.at > 1500) hold.current = { ...hold.current, peakDb, at: now };
   if (peak >= 0.985) hold.current.clipAt = now;
   const clip = now - hold.current.clipAt < 1200;
-  return <LoudnessMeter db={db} peak={hold.current.peakDb} clip={clip} height={300} segments={24} />;
+  return <LoudnessMeter db={db} peak={hold.current.peakDb} clip={clip} height={height} segments={24} />;
 }

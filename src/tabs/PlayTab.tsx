@@ -12,6 +12,7 @@ import { NoteSlots } from '../components/NoteSlots';
 import { RangePill } from '../components/RangeControl';
 import { RunView, type RunState } from '../components/RunView';
 import { useDisplayNote } from '../state/pitchStore';
+import { useTablet } from '../state/useTablet';
 import { historyIndex, historyLength, midis, times } from '../state/pitchHistory';
 import { scoreNote, summarizeRun, type NoteScore, type RunSummary } from '../music/scoring';
 
@@ -228,6 +229,7 @@ export function PlayTab() {
   const chipStep = step < 0 ? -1 : turn >= 0 && step > turn ? 2 * turn - step : step;
   const inScale = useCallback((m: number) => isInScale(m, s.playRoot, scale), [s.playRoot, scale]);
   const now = useCallback(() => getAudioContext().currentTime, []);
+  const tablet = useTablet();
 
   return (
     <div className="cols">
@@ -273,7 +275,7 @@ export function PlayTab() {
           {turn >= 0 && <span className={`chip sm${step > turn ? ' on' : ''}`}>↩</span>}
         </div>
         <div style={{ marginTop: 8 }}>
-          <RunView run={runRef} now={now} height={120} />
+          <RunView run={runRef} now={now} height={tablet ? 170 : 120} />
         </div>
         {(summary || edgeNote || introMidi !== null || listening) && (
           <div className="row wrap" style={{ marginTop: 8, gap: 6 }}>
