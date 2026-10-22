@@ -3,8 +3,8 @@ import { isSharp, noteLabel, noteName, octaveOf } from '../music/notes';
 
 export const PIANO_LO = 24; // C1
 export const PIANO_HI = 96; // C7
-const WHITE_W = 36;
-const BLACK_W = 24;
+const WHITE_W = 46;
+const BLACK_W = 30;
 const TAP_SLOP = 6; // px of movement before a press becomes a drag
 
 export interface PianoProps {
