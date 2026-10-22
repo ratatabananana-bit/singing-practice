@@ -147,15 +147,27 @@ export const useStudio = create<StudioState>()((set, get) => ({
     set({ busy: true, error: null });
     try {
       const base = ytHelperBase();
+      if (!base && !isDevServer()) {
+        throw new Error('Set the helper address first: Settings → YouTube helper → http://<pc-ip>:5174 (with "npm run server" running on the PC).');
+      }
       const r = await fetch(`${base}/api/yt?url=${encodeURIComponent(url.trim())}`);
       if (!r.ok) throw new Error((await r.text()) || `helper replied ${r.status}`);
+      const ctype = r.headers.get('Content-Type') || '';
+      if (!ctype.startsWith('audio/')) {
+        throw new Error(`The helper address did not return audio (got ${ctype || 'unknown'}). Check Settings → YouTube helper points at the PC running "npm run server".`);
+      }
       const title = decodeURIComponent(r.headers.get('X-Title') || 'YouTube audio');
-      const ext = r.headers.get('X-Ext') || 'm4a';
+      const ext = r.headers.get('X-Ext') || (ctype.includes('mpeg') ? 'mp3' : 'm4a');
       const blob = await r.blob();
-      await get().loadFile(new File([blob], `${title}.${ext}`, { type: blob.type || 'audio/mp4' }));
+      await get().loadFile(new File([blob], `${title}.${ext}`, { type: blob.type || ctype }));
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      set({ busy: false, error: /Failed to fetch|NetworkError|502|503/.test(msg) ? 'YouTube helper is not running. On the PC run: npm run server' : `YouTube: ${msg}` });
+      set({
+        busy: false,
+        error: /Failed to fetch|NetworkError|Load failed|502|503/.test(msg)
+          ? 'Could not reach the YouTube helper. On the PC run "npm run server"; on a phone or tablet set its address in Settings → YouTube helper (same Wi-Fi).'
+          : `YouTube: ${msg}`,
+      });
     }
   },
 
@@ -399,6 +411,11 @@ trackPlayer.onWrap(() => {
   trackPlayer.setSpeed(next / 100);
   st.setMeta({ speed: next / 100 });
 });
+
+/** True when served by the Vite dev server (which proxies /api to the helper). */
+function isDevServer(): boolean {
+  return typeof location !== 'undefined' && /^https?:\/\/(localhost|127\.0\.0\.1|192\.168\.|10\.|172\.)/.test(location.origin) && location.port === '5173';
+}
 
 /** Helper base URL: same origin in dev (Vite proxies /api), else the PC's address saved in settings. */
 function ytHelperBase(): string {

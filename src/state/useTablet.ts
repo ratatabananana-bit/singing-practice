@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 
-export const TABLET_QUERY = '(min-width: 760px)';
+export const TABLET_QUERY = '(min-width: 600px)';
 
 /** True on tablet-width screens (matches the CSS breakpoint in global.css). */
 export function useTablet(): boolean {

@@ -3,6 +3,7 @@ import { useSettings, DEFAULT_PITCH_DEBUG, type IntroMode, type SoundMode } from
 import { SCALES } from '../music/scales';
 import { measureLatency } from '../audio/latency';
 import { Switch } from './Switch';
+import { MicTest } from './MicTest';
 
 export function SettingsSheet({ onClose }: { onClose: () => void }) {
   const s = useSettings();
@@ -137,6 +138,11 @@ export function SettingsSheet({ onClose }: { onClose: () => void }) {
             <div className="title">YouTube helper</div>
             <div className="desc">Runs on your PC (npm run server). Leave empty on the PC; on a phone enter the PC address, e.g. http://192.168.0.79:5174</div>
             <input type="text" inputMode="url" placeholder="http://<pc-ip>:5174" value={s.ytHelperUrl} onChange={(e) => s.set({ ytHelperUrl: e.target.value })} style={{ minHeight: 40 }} />
+          </div>
+
+          <div className="setting">
+            <div className="title">Mic test</div>
+            <MicTest />
           </div>
 
           <div className="setting">

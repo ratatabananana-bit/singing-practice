@@ -4,7 +4,7 @@ import { isSharp, noteLabel, noteName, octaveOf } from '../music/notes';
 export const PIANO_LO = 24; // C1
 export const PIANO_HI = 96; // C7
 // Key geometry must match global.css (.piano .white / .black), phone vs tablet.
-const TABLET = '(min-width: 760px)';
+const TABLET = '(min-width: 600px)';
 function keyWidths(): { white: number; black: number } {
   const t = typeof window !== 'undefined' && window.matchMedia(TABLET).matches;
   return t ? { white: 46, black: 30 } : { white: 36, black: 24 };
