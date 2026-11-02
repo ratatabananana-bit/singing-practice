@@ -1,15 +1,45 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useSettings, DEFAULT_PITCH_DEBUG, type IntroMode, type SoundMode } from '../state/settings';
 import { SCALES } from '../music/scales';
 import { measureLatency } from '../audio/latency';
 import { Switch } from './Switch';
 import { MicTest } from './MicTest';
+import { mic } from '../audio/mic/MicService';
+import { YtAudio, hasNativeYt } from '../native/ytAudio';
 
 export function SettingsSheet({ onClose }: { onClose: () => void }) {
   const s = useSettings();
   const [measuring, setMeasuring] = useState(false);
   const [measureMsg, setMeasureMsg] = useState<string | null>(null);
   const [debugOpen, setDebugOpen] = useState(false);
+  const [ytVersion, setYtVersion] = useState<string | null>(null);
+  const [ytUpdating, setYtUpdating] = useState(false);
+  const [ytMsg, setYtMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!hasNativeYt()) return;
+    let alive = true;
+    YtAudio.version()
+      .then((v) => alive && setYtVersion(v.version ?? (v.error ? `not ready (${v.error})` : null)))
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const runYtUpdate = async () => {
+    setYtUpdating(true);
+    setYtMsg(null);
+    try {
+      const r = await YtAudio.update();
+      setYtVersion(r.version);
+      setYtMsg(r.status === 'ALREADY_UP_TO_DATE' ? 'Already up to date.' : 'Updated.');
+    } catch (e) {
+      setYtMsg(`Update failed: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setYtUpdating(false);
+    }
+  };
 
   const runMeasure = async () => {
     setMeasuring(true);
@@ -95,6 +125,22 @@ export function SettingsSheet({ onClose }: { onClose: () => void }) {
             <Slider label="Hold duration" value={s.holdSeconds} min={0.5} max={5} step={0.1} unit="s" onChange={(v) => s.set({ holdSeconds: v })} />
             <Slider label="Silence gate" value={s.silenceDb} min={-80} max={-20} step={1} unit="dB" onChange={(v) => s.set({ silenceDb: v })} />
             <div className="desc">Below the gate, input counts as silence everywhere (tuner, graphs, takes).</div>
+            <Switch
+              on={s.echoCancel}
+              onChange={(v) => {
+                s.set({ echoCancel: v });
+                // The constraint only applies to a new stream.
+                if (mic.state === 'running' || mic.state === 'starting') {
+                  mic.stop();
+                  void mic.start();
+                }
+              }}
+              label="Echo cancel (mic ignores the speaker)"
+            />
+            <div className="desc">
+              Experimental. Off = raw mic, the accuracy baseline. On asks Android to subtract the speaker (piano, backing track) from the mic so the app stops scoring its own sound.
+              May soften your voice while both sound at once; compare the cents with it on and off. Mic test shows whether the OS applied it.
+            </div>
             <Slider label="Graph speed (Studio)" value={s.graphSpeed} min={20} max={200} step={5} unit="px/s" onChange={(v) => s.set({ graphSpeed: v })} />
             <div className="row between" style={{ fontSize: 12 }}>
               <span className="muted">Graph line</span>
@@ -134,11 +180,27 @@ export function SettingsSheet({ onClose }: { onClose: () => void }) {
             <Slider label="Manual offset" value={s.latencyOffsetMs} min={-200} max={400} step={5} unit="ms" onChange={(v) => s.set({ latencyOffsetMs: v })} />
           </div>
 
-          <div className="setting">
-            <div className="title">YouTube helper</div>
-            <div className="desc">Runs on your PC (npm run server). Leave empty on the PC; on a phone enter the PC address, e.g. http://192.168.0.79:5174</div>
-            <input type="text" inputMode="url" placeholder="http://<pc-ip>:5174" value={s.ytHelperUrl} onChange={(e) => s.set({ ytHelperUrl: e.target.value })} style={{ minHeight: 40 }} />
-          </div>
+          {hasNativeYt() ? (
+            <div className="setting">
+              <div className="title">YouTube (yt-dlp on this device)</div>
+              <div className="desc">
+                Built in, nothing to set up. If YouTube links stop working, update yt-dlp here.
+                {ytVersion ? ` Installed: ${ytVersion}.` : ''}
+              </div>
+              <div className="row" style={{ gap: 8, alignItems: 'center' }}>
+                <button className="btn sm" disabled={ytUpdating} onClick={() => void runYtUpdate()}>
+                  {ytUpdating ? 'Updating…' : 'Update yt-dlp'}
+                </button>
+                {ytMsg && <span className="desc" style={{ margin: 0 }}>{ytMsg}</span>}
+              </div>
+            </div>
+          ) : (
+            <div className="setting">
+              <div className="title">YouTube helper</div>
+              <div className="desc">Runs on your PC (npm run server). Leave empty on the PC; on a phone browser enter the PC address, e.g. http://192.168.0.79:5174</div>
+              <input type="text" inputMode="url" placeholder="http://<pc-ip>:5174" value={s.ytHelperUrl} onChange={(e) => s.set({ ytHelperUrl: e.target.value })} style={{ minHeight: 40 }} />
+            </div>
+          )}
 
           <div className="setting">
             <div className="title">Mic test</div>

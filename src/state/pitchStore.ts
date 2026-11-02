@@ -16,6 +16,14 @@ mic.subscribe((f) => {
   for (const l of listeners) l();
 });
 
+// A paused or stopped mic produces no frames, so the last one would stay frozen in every readout
+// (level meter, clip light, note pill). Clear it when the mic is not running.
+mic.onState((s) => {
+  if (s === 'running' || latest === SILENT) return;
+  latest = SILENT;
+  for (const l of listeners) l();
+});
+
 function subscribe(cb: () => void): () => void {
   listeners.add(cb);
   return () => listeners.delete(cb);

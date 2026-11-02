@@ -104,7 +104,7 @@ Load a backing track (a song file from the device), practice over it with loop p
 - Play / pause, seek bar with current time and duration.
 - **Speed** control (slow down for practice) and **transpose** (shift key in semitones) — independent of each other (speed change must not change pitch, transpose must not change speed).
 - **Bookmarks / pins:** drop a marker at the current playhead; rename it; set its time precisely by typing (m:ss.cc); re-pin it to the current playhead; sort by time; jump to it.
-- **Loop sections:** the span between two consecutive bookmarks is a loop section. Selecting one loops that section seamlessly. Loop on/off toggle.
+- **Segments and sections:** the span between two consecutive markers is a segment. Tapping one loops it; tapping a later one right after sets the loop end; any later tap starts a new loop. A section is a segment, or a run of segments, with a name and colour, stored by its two marker ids (it moves with the markers). Loop on/off toggle.
 - **Bookmarks and the active loop section must be remembered per track across app restarts.** (Also never worked in the first build.)
 - Expandable card to show/hide the advanced controls.
 

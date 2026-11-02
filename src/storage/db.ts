@@ -1,4 +1,5 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
+import type { BeatGrid } from '../audio/dsp/beats';
 
 export interface Bookmark {
   id: string;
@@ -13,8 +14,15 @@ export interface TrackRecord {
   size: number;
   addedAt: number;
   blob: Blob;
+  /** Where it came from when known, e.g. "youtube:<videoId>"; used to recognise re-imports. */
+  source?: string;
 }
 
+/**
+ * A named, coloured fixed span of the track. Made from the A–B markers, then independent of them:
+ * moving a marker never moves a section; its times are edited by typing. (0.1.5 dev builds stored
+ * a pair of marker ids instead; `migrateSections` in storage/sections.ts converts those on load.)
+ */
 export interface Section {
   id: string;
   name: string;
@@ -29,18 +37,21 @@ export interface TrackMeta {
   bookmarks: Bookmark[];
   /** Named, coloured song parts (Verse, Chorus…) that can be looped directly. */
   sections?: Section[];
-  /** Section currently looped (takes precedence over the marker pair). */
+  /** Pre-0.1.5: id of the looped section; migrated into activeLoop/loopEnd and cleared. */
   activeSection?: string | null;
   /** Index (in time order) of the marker that starts the loop, or null. */
   activeLoop: number | null;
   /** Index of the marker that ends the loop; defaults to activeLoop + 1 when missing. */
   loopEnd?: number | null;
+  /** Temporary loop ends in seconds, used when a section is looped and its bound has no marker (never saved as markers). */
+  tempA?: number | null;
+  tempB?: number | null;
   loopOn: boolean;
   speed: number;
   transpose: number;
   fineCents?: number;
-  /** Detected tempo grid, null when detection failed, undefined when not run yet. */
-  beatGrid?: { bpm: number; offset: number; confidence: number } | null;
+  /** Detected tempo grid (see dsp/beats.ts), null when detection failed, undefined when not run yet. */
+  beatGrid?: BeatGrid | null;
   beatsPerBar?: number;
   snapOn?: boolean;
   loopGap?: number;
@@ -130,6 +141,12 @@ export const storage = {
   async putMeta(meta: TrackMeta): Promise<void> {
     const d = await db();
     await d.put('trackMeta', meta);
+  },
+  /** Point takes recorded against any of `from` at track `to` (used when duplicate tracks are merged). */
+  async remapTakes(from: string[], to: string): Promise<void> {
+    const d = await db();
+    const all = await d.getAll('takes');
+    for (const t of all) if (t.trackId && from.includes(t.trackId)) await d.put('takes', { ...t, trackId: to });
   },
   async putTake(take: TakeRecord): Promise<TakeRecord[]> {
     const d = await db();

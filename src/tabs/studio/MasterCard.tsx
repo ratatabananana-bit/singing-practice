@@ -8,7 +8,9 @@ import { encodeWav, waveformSummary } from '../../audio/dsp/wav';
 import { getAudioContext } from '../../audio/context';
 import { centsOff } from '../../music/notes';
 import { PianoRollGraph, type ReplaySource, type ReferenceSource } from '../../components/PianoRollGraph';
-import { trackPlayer } from '../../audio/player/TrackPlayer';
+import { trackPlayer, type PlayerSnapshot } from '../../audio/player/TrackPlayer';
+import { loopTimes } from '../../state/loopTaps';
+import { sortedMarkers } from '../../storage/sections';
 import { instrument } from '../../audio/synth/Instrument';
 import { LoudnessMeter } from '../../components/LoudnessMeter';
 import { NoteSlots } from '../../components/NoteSlots';
@@ -24,6 +26,11 @@ export function MasterCard() {
   const tablet = useTablet();
   const [takePlaying, setTakePlaying] = useState(false);
   useEffect(() => takePlayer.subscribe((s) => setTakePlaying(s.playing)), []);
+  // Track transport mirrored here, so the song can be played / looped while recording.
+  const [track, setTrack] = useState<PlayerSnapshot>(trackPlayer.state);
+  useEffect(() => trackPlayer.subscribe(setTrack), []);
+  const [loopA, loopB] = st.meta ? loopTimes(st.meta, sortedMarkers(st.meta)) : [null, null];
+  const canLoop = loopA !== null && loopB !== null && loopB > loopA;
 
   const replayTake = st.replayTakeId ? st.takes.find((t) => t.id === st.replayTakeId) : null;
   const replay = useMemo<ReplaySource | null>(
@@ -94,10 +101,9 @@ export function MasterCard() {
         await new Promise((r) => setTimeout(r, 4 * beat * 1000));
         useStudio.setState({ countdown: 0 });
       }
-      takeStart.current = trackPlayer.state.loaded && trackPlayer.state.playing ? trackPlayer.estimatePosition() : trackPlayer.state.loaded ? trackPlayer.state.position : -1;
+      // Recording never starts the track. Only a take sung over a running track is aligned to it.
+      takeStart.current = trackPlayer.state.loaded && trackPlayer.state.playing ? trackPlayer.estimatePosition() : -1;
       await recorder.start(totalLatencyMs(settings) / 1000);
-      // Start the track with the take when it is loaded but paused, so the take lines up from 0.
-      if (trackPlayer.state.loaded && !trackPlayer.state.playing) void trackPlayer.play();
       useStudio.setState({ recording: true });
     }
   };
@@ -109,9 +115,35 @@ export function MasterCard() {
           <span className="label">Master</span>
           <CompactTuner />
         </div>
-        <button data-mic-toggle className={`pill sm ${statusCls}`} onClick={() => (status === 'REPLAY' ? takePlayer.pause() : mic.toggle())}>
-          {status}
-        </button>
+        <div className="row" style={{ gap: 6 }}>
+          {track.loaded && (
+            <>
+              <button className={`tool master-tp${track.playing ? ' on' : ''}`} onClick={() => trackPlayer.toggle()} aria-label={track.playing ? 'Pause track' : 'Play track'} title={track.playing ? 'Pause the track' : 'Play the track'}>
+                {track.playing ? (
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                    <rect x="5" y="4" width="5" height="16" rx="1" />
+                    <rect x="14" y="4" width="5" height="16" rx="1" />
+                  </svg>
+                ) : (
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                    <path d="M7 4l13 8-13 8z" />
+                  </svg>
+                )}
+              </button>
+              <button className={`tool master-tp${canLoop && st.meta?.loopOn ? ' on' : ''}`} disabled={!canLoop} onClick={() => st.toggleLoop()} aria-label={st.meta?.loopOn ? 'Loop on' : 'Loop off'} title={!canLoop ? 'Set A and B in the track card to loop' : st.meta?.loopOn ? 'Looping A–B · tap to play through' : 'Tap to loop A–B'}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M17 2l4 4-4 4" />
+                  <path d="M3 11V9a4 4 0 0 1 4-4h14" />
+                  <path d="M7 22l-4-4 4-4" />
+                  <path d="M21 13v2a4 4 0 0 1-4 4H3" />
+                </svg>
+              </button>
+            </>
+          )}
+          <button data-mic-toggle className={`pill sm ${statusCls}`} onClick={() => (status === 'REPLAY' ? takePlayer.pause() : mic.toggle())}>
+            {status}
+          </button>
+        </div>
       </div>
       <div className="row" style={{ marginTop: 8, alignItems: 'stretch' }}>
         <PianoRollGraph speed={settings.graphSpeed} replay={takePlaying ? replay : null} reference={reference} now={() => getAudioContext().currentTime} height={tablet ? 380 : 300} />
@@ -165,11 +197,18 @@ function CompactTuner() {
 function MasterMeter({ height }: { height: number }) {
   const db = usePitchSelector((f) => Math.round(f.db));
   const peak = usePitchSelector((f) => f.peak);
-  const hold = useRef({ peakDb: -120, at: 0, clipAt: 0 });
+  const frameTime = usePitchSelector((f) => f.time);
+  const { state: micState } = useMicState();
+  const hold = useRef({ peakDb: -120, at: 0, clipAt: 0, lastFrame: -1 });
   const now = performance.now();
-  const peakDb = peak > 0 ? 20 * Math.log10(peak) : -120;
+  const live = micState === 'running';
+  // Only a *new* frame from a running mic can arm the clip light; a frozen last frame (mic paused
+  // or stopped) must not keep it lit on every render.
+  const fresh = live && frameTime !== hold.current.lastFrame;
+  hold.current.lastFrame = frameTime;
+  const peakDb = live && peak > 0 ? 20 * Math.log10(peak) : -120;
   if (peakDb >= hold.current.peakDb || now - hold.current.at > 1500) hold.current = { ...hold.current, peakDb, at: now };
-  if (peak >= 0.985) hold.current.clipAt = now;
-  const clip = now - hold.current.clipAt < 1200;
-  return <LoudnessMeter db={db} peak={hold.current.peakDb} clip={clip} height={height} segments={24} />;
+  if (fresh && peak >= 0.985) hold.current.clipAt = now;
+  const clip = live && now - hold.current.clipAt < 1200;
+  return <LoudnessMeter db={live ? db : -120} peak={hold.current.peakDb} clip={clip} height={height} segments={24} />;
 }

@@ -19,7 +19,12 @@ const TABS: { id: Tab; name: string; sub: string }[] = [
 ];
 
 export function App() {
-  const [tab, setTab] = useState<Tab>(() => (localStorage.getItem('tab') as Tab) || 'play');
+  // `?tab=play|tune|studio` opens a tab directly (screenshots, dev links); otherwise the last one used.
+  const [tab, setTab] = useState<Tab>(() => {
+    const q = new URLSearchParams(location.search).get('tab');
+    if (q === 'play' || q === 'tune' || q === 'studio') return q;
+    return (localStorage.getItem('tab') as Tab) || 'play';
+  });
   const [settingsOpen, setSettingsOpen] = useState(false);
   const { state: micState, error: micError } = useMicState();
 

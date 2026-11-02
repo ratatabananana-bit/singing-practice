@@ -54,6 +54,10 @@ export class Sequencer {
   private listenFirst = false;
   private gapBeats = 1;
   private runNotes: ScheduledNote[] = [];
+  /** True between start() being called and the audio context unlocking. */
+  private starting = false;
+  /** Bumped by every start()/stop(); a start() that awaited past a newer one abandons itself. */
+  private generation = 0;
 
   bpm = 120;
   sound: SoundMode = 'piano';
@@ -74,7 +78,12 @@ export class Sequencer {
     this.holdBeats = Math.max(1, o.holdBeats ?? 1);
     this.listenFirst = !!o.listenFirst;
     this.gapBeats = o.gapBeats ?? 1;
+    const gen = ++this.generation;
+    this.starting = true;
     await unlockAudio();
+    // stop() (or another start()) came in while the context was unlocking: this run never happened.
+    if (gen !== this.generation) return;
+    this.starting = false;
     const ctx = getAudioContext();
     this.sequence = o.sequence;
     this.introNotes = o.intro === 'off' ? [] : o.intro === '15' ? [o.root, o.root + 7] : [o.root, o.root + 4, o.root + 7];
@@ -88,15 +97,23 @@ export class Sequencer {
     this.timer = window.setInterval(() => this.tick(), 25);
   }
 
-  /** Stop playback. `cut` silences notes that are still ringing. */
+  /**
+   * Stop playback. `cut` silences notes that are still ringing.
+   * The UI counts a run as active until onRunEnd or onStop, so "active" here must include the
+   * tail after the last note (scheduling is done, running=false, but onRunEnd is still pending on a
+   * timer) and a start() still waiting for the audio context. Without that, a Pause tap in the gap
+   * cleared the pending onRunEnd and never sent onStop, leaving the Play button stuck on Pause.
+   */
   stop(notify = true, cut = true): void {
+    const was = this.running || this.starting || this.uiTimers.length > 0;
+    this.generation++;
+    this.starting = false;
     if (this.timer !== null) {
       clearInterval(this.timer);
       this.timer = null;
     }
     for (const t of this.uiTimers) clearTimeout(t);
     this.uiTimers = [];
-    const was = this.running;
     this.running = false;
     if (cut) instrument.stopAll();
     if (was && notify) this.events.onStop();

@@ -39,10 +39,9 @@ export function LoudnessMeter({
         return <i key={i} style={{ height: segH }} className={i === peakIdx ? 'peak' : on ? cls.join(' ') : ''} />;
       })}
       {clip && (
-        <span
-          className="pill bad sm"
-          style={{ position: 'absolute', top: -26, left: '50%', transform: 'translateX(-50%)', height: 18, fontSize: 9, padding: '0 5px' }}
-        >
+        // Sits just left of the meter's top, over the graph corner: above the meter is the status
+        // pill row, and the meter itself is far too narrow for the word.
+        <span className="pill bad sm" style={{ position: 'absolute', top: 2, right: '100%', marginRight: 6, height: 18, fontSize: 9, padding: '0 5px', maxWidth: 'none' }}>
           CLIP
         </span>
       )}

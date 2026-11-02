@@ -4,8 +4,12 @@ import { trackPlayer, TrackPlayer } from '../audio/player/TrackPlayer';
 import { useSettings } from './settings';
 import { instrument } from '../audio/synth/Instrument';
 import BeatWorker from '../audio/dsp/beats.worker?worker';
-import { snapToBeat, type BeatGrid } from '../audio/dsp/beats';
+import { snapToBeat, nearestBeatIndex, type BeatGrid } from '../audio/dsp/beats';
 import * as pitchHistory from './pitchHistory';
+import { YtAudio, hasNativeYt, nativeFileUrl } from '../native/ytAudio';
+import { duplicateGroups, mergeMetas, pickPrimary, trackKey } from '../storage/dedupe';
+import { SAME_TIME_SEC, migrateSections, sortedMarkers } from '../storage/sections';
+import { loopTimes } from './loopTaps';
 
 /** Second player instance for takes (so a take can play over / instead of the track). */
 export const takePlayer = new TrackPlayer();
@@ -20,31 +24,44 @@ export interface StudioState {
   replayTakeId: string | null;
   error: string | null;
   busy: boolean;
+  /** What the busy state is doing right now (e.g. "Downloading 42%"), null = plain loading. */
+  busyText: string | null;
   /** Speed trainer: raise speed by stepPct after each loop pass until targetPct. */
   trainer: { on: boolean; startPct: number; targetPct: number; stepPct: number };
   /** Count-in in progress (clicks left), 0 = none. */
   countdown: number;
 
-  loadFile: (file: File) => Promise<void>;
-  /** Fetch audio for a YouTube link through the local helper server, then load it like a file. */
+  /** Load an audio file. `source` (e.g. "youtube:<id>") lets a re-import find the existing record and its markers. */
+  loadFile: (file: File, source?: string) => Promise<void>;
+  /** Fetch audio for a YouTube link (yt-dlp on the device in the app, the PC helper in a browser), then load it like a file. */
   loadYouTube: (url: string) => Promise<void>;
+  /** Stop an in-progress YouTube download (app only). */
+  cancelYouTube: () => Promise<void>;
   loadLast: () => Promise<void>;
   setMeta: (patch: Partial<TrackMeta>) => void;
-  addBookmark: (time: number) => void;
+  /** Drop a marker at `time` (snapped when snapping is on). Returns its id. */
+  addBookmark: (time: number) => string;
   updateBookmark: (id: string, patch: Partial<Bookmark>) => void;
   removeBookmark: (id: string) => void;
   sortBookmarks: () => void;
   clearBookmarks: () => void;
-  /** Cycle the active loop: section 0 → 1 → … → off. */
+  /** Cycle the active loop: segment 0 → 1 → … → off. */
   cycleLoop: () => void;
   setActiveLoop: (index: number | null) => void;
   /** Loop between any two markers (time-order indices). */
   setLoopRange: (a: number, b: number) => void;
+  /** Set A and B independently (either may be null = not picked); the loop runs only when both are set. */
+  setLoopEnds: (a: number | null, b: number | null) => void;
+  /** Loop a fixed span: each end becomes the marker within 50 ms of it, else a temporary end (not a marker). Seeks to the start. */
+  setLoopFromSection: (start: number, end: number) => void;
+  /** Loop on/off without touching A or B; turning it on jumps to A so the loop starts at once. */
+  toggleLoop: () => void;
+  /** Put the loop fields back to a snapshot (used to undo a tap's loop change on double-tap). */
+  restoreLoop: (s: LoopSnapshot) => void;
+  /** Add a fixed-span section. Returns the new section's id. */
   addSection: (s: Omit<Section, 'id'>) => string;
-  updateSection: (id: string, patch: Partial<Section>) => void;
+  updateSection: (id: string, patch: Partial<Omit<Section, 'id'>>) => void;
   removeSection: (id: string) => void;
-  /** Loop a section (seeks to its start); null clears the section loop. */
-  loopSection: (id: string | null) => void;
   setLoopOn: (on: boolean) => void;
   refreshTakes: () => Promise<void>;
   addTake: (take: TakeRecord) => Promise<void>;
@@ -82,26 +99,27 @@ window.addEventListener('pagehide', flushMeta);
 window.addEventListener('beforeunload', flushMeta);
 document.addEventListener('visibilitychange', () => document.visibilityState === 'hidden' && flushMeta());
 
+/** The fields that describe which loop is active. */
+export type LoopSnapshot = Pick<TrackMeta, 'activeLoop' | 'loopEnd' | 'loopOn' | 'tempA' | 'tempB'>;
+
+export function loopSnapshot(meta: TrackMeta): LoopSnapshot {
+  return { activeLoop: meta.activeLoop, loopEnd: meta.loopEnd ?? null, loopOn: meta.loopOn, tempA: meta.tempA ?? null, tempB: meta.tempB ?? null };
+}
+
 /** Active loop as [startIndex, endIndex] in time order, or [null, null]. */
 export function loopPair(meta: TrackMeta): [number | null, number | null] {
   const a = meta.activeLoop;
   if (a === null || a < 0) return [null, null];
-  const b = meta.loopEnd ?? a + 1;
-  if (b <= a || b >= meta.bookmarks.length) return [null, null];
+  // loopEnd undefined = record from before B was stored (next marker); null = B not picked.
+  const b = meta.loopEnd === undefined ? a + 1 : meta.loopEnd;
+  if (b === null || b <= a || b >= meta.bookmarks.length) return [null, null];
   return [a, b];
 }
 
 function applyLoop(meta: TrackMeta) {
-  const sorted = [...meta.bookmarks].sort((a, b) => a.time - b.time);
-  const sec = meta.activeSection ? meta.sections?.find((x) => x.id === meta.activeSection) : undefined;
-  const [i, j] = loopPair(meta);
-  if (meta.loopOn && sec && sec.end > sec.start) {
-    trackPlayer.setLoop(true, sec.start, sec.end);
-  } else if (meta.loopOn && i !== null && j !== null && j < sorted.length) {
-    trackPlayer.setLoop(true, sorted[i].time, sorted[j].time);
-  } else {
-    trackPlayer.setLoop(false, 0, 0);
-  }
+  const [a, b] = loopTimes(meta, sortedMarkers(meta));
+  if (meta.loopOn && a !== null && b !== null && b > a) trackPlayer.setLoop(true, a, b);
+  else trackPlayer.setLoop(false, 0, 0);
 }
 
 export const useStudio = create<StudioState>()((set, get) => ({
@@ -113,12 +131,19 @@ export const useStudio = create<StudioState>()((set, get) => ({
   replayTakeId: null,
   error: null,
   busy: false,
+  busyText: null,
   trainer: { on: false, startPct: 70, targetPct: 100, stepPct: 5 },
   countdown: 0,
 
-  async loadFile(file) {
+  async loadFile(file, source) {
     set({ busy: true, error: null });
-    const id = uid();
+    await storageReady;
+    // Same song again (same YouTube video, or same file name + size)? Reuse its record so the
+    // markers, sections and loop come back instead of starting from nothing.
+    const all = await storage.listTracks().catch(() => []);
+    const key = trackKey({ name: file.name, size: file.size, source });
+    const existing = all.find((t) => trackKey(t) === key) ?? all.find((t) => t.name === file.name && t.size === file.size);
+    const id = existing?.id ?? uid();
     try {
       await trackPlayer.load(file);
     } catch (e) {
@@ -127,15 +152,19 @@ export const useStudio = create<StudioState>()((set, get) => ({
     }
     let saved = true;
     try {
-      await storage.putTrack({ id, name: file.name, type: file.type, size: file.size, addedAt: Date.now(), blob: file });
+      if (!existing) await storage.putTrack({ id, name: file.name, type: file.type, size: file.size, addedAt: Date.now(), blob: file, source });
+      else if (source && !existing.source) {
+        const rec = await storage.getTrack(id);
+        if (rec) await storage.putTrack({ ...rec, source });
+      }
     } catch (e) {
       saved = false;
       set({ error: `Track loaded but not saved for next time (${e instanceof Error ? e.message : 'storage full?'})` });
     }
-    const meta = await storage.getMeta(id);
+    const meta = await loadMeta(id);
     useSettings.getState().set({ lastTrackId: saved ? id : null });
-    set({ track: { id, name: file.name }, meta, busy: false });
-    if (meta.beatGrid === undefined) get().detectBeats();
+    set({ track: { id, name: file.name }, meta, busy: false, busyText: null });
+    if (needsBeatDetection(meta)) get().detectBeats();
     trackPlayer.setSpeed(meta.speed);
     trackPlayer.setTranspose(meta.transpose);
     trackPlayer.setFineCents(meta.fineCents ?? 0);
@@ -144,7 +173,11 @@ export const useStudio = create<StudioState>()((set, get) => ({
   },
 
   async loadYouTube(url) {
-    set({ busy: true, error: null });
+    if (hasNativeYt()) {
+      await loadYouTubeNative(url, set, get);
+      return;
+    }
+    set({ busy: true, error: null, busyText: 'Fetching…' });
     try {
       const base = ytHelperBase();
       if (!base && !isDevServer()) {
@@ -159,11 +192,12 @@ export const useStudio = create<StudioState>()((set, get) => ({
       const title = decodeURIComponent(r.headers.get('X-Title') || 'YouTube audio');
       const ext = r.headers.get('X-Ext') || (ctype.includes('mpeg') ? 'mp3' : 'm4a');
       const blob = await r.blob();
-      await get().loadFile(new File([blob], `${title}.${ext}`, { type: blob.type || ctype }));
+      await get().loadFile(new File([blob], `${title}.${ext}`, { type: blob.type || ctype }), youtubeSource(url));
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       set({
         busy: false,
+        busyText: null,
         error: /Failed to fetch|NetworkError|Load failed|502|503/.test(msg)
           ? 'Could not reach the YouTube helper. On the PC run "npm run server"; on a phone or tablet set its address in Settings → YouTube helper (same Wi-Fi).'
           : `YouTube: ${msg}`,
@@ -171,7 +205,17 @@ export const useStudio = create<StudioState>()((set, get) => ({
     }
   },
 
+  async cancelYouTube() {
+    if (!hasNativeYt()) return;
+    try {
+      await YtAudio.cancel();
+    } catch {
+      /* nothing to cancel */
+    }
+  },
+
   async loadLast() {
+    await storageReady;
     const id = useSettings.getState().lastTrackId;
     if (!id) return;
     set({ busy: true, error: null });
@@ -187,9 +231,9 @@ export const useStudio = create<StudioState>()((set, get) => ({
       set({ busy: false, error: `Could not decode "${rec.name}": ${e instanceof Error ? e.message : String(e)}` });
       return;
     }
-    const meta = await storage.getMeta(id);
+    const meta = await loadMeta(id);
     set({ track: { id, name: rec.name }, meta, busy: false });
-    if (meta.beatGrid === undefined) get().detectBeats();
+    if (needsBeatDetection(meta)) get().detectBeats();
     trackPlayer.setSpeed(meta.speed);
     trackPlayer.setTranspose(meta.transpose);
     trackPlayer.setFineCents(meta.fineCents ?? 0);
@@ -208,10 +252,11 @@ export const useStudio = create<StudioState>()((set, get) => ({
 
   addBookmark(time) {
     const meta = get().meta;
-    if (!meta) return;
+    if (!meta) return '';
     const n = meta.bookmarks.length + 1;
     const bm: Bookmark = { id: uid(), name: `Pin ${n}`, time: get().snap(time) };
     get().setMeta({ bookmarks: [...meta.bookmarks, bm] });
+    return bm.id;
   },
   updateBookmark(id, patch) {
     const meta = get().meta;
@@ -257,14 +302,22 @@ export const useStudio = create<StudioState>()((set, get) => ({
   setActiveLoop(index) {
     const meta = get().meta;
     if (!meta) return;
-    const next = { ...meta, activeLoop: index, loopEnd: index !== null ? index + 1 : null, loopOn: index !== null ? true : meta.loopOn, activeSection: null };
+    const next = { ...meta, activeLoop: index, loopEnd: index !== null ? index + 1 : null, loopOn: index !== null ? true : meta.loopOn, tempA: null, tempB: null };
     set({ meta: next });
     persistMeta(next);
     applyLoop(next);
     if (index !== null) {
-      const sorted = [...next.bookmarks].sort((a, b) => a.time - b.time);
+      const sorted = sortedMarkers(next);
       if (sorted[index]) trackPlayer.seek(sorted[index].time);
     }
+  },
+  restoreLoop(s) {
+    const meta = get().meta;
+    if (!meta) return;
+    const next = { ...meta, ...s };
+    set({ meta: next });
+    persistMeta(next);
+    applyLoop(next);
   },
   addSection(sec) {
     const meta = get().meta;
@@ -278,30 +331,12 @@ export const useStudio = create<StudioState>()((set, get) => ({
   updateSection(id, patch) {
     const meta = get().meta;
     if (!meta) return;
-    if (patch.start !== undefined) patch = { ...patch, start: get().snap(patch.start) };
-    if (patch.end !== undefined) patch = { ...patch, end: get().snap(patch.end) };
-    const next = { ...meta, sections: (meta.sections ?? []).map((x) => (x.id === id ? { ...x, ...patch } : x)) };
-    set({ meta: next });
-    persistMeta(next);
-    applyLoop(next);
+    get().setMeta({ sections: (meta.sections ?? []).map((x) => (x.id === id ? { ...x, ...patch } : x)) });
   },
   removeSection(id) {
     const meta = get().meta;
     if (!meta) return;
-    const next = { ...meta, sections: (meta.sections ?? []).filter((x) => x.id !== id), activeSection: meta.activeSection === id ? null : meta.activeSection };
-    set({ meta: next });
-    persistMeta(next);
-    applyLoop(next);
-  },
-  loopSection(id) {
-    const meta = get().meta;
-    if (!meta) return;
-    const next = { ...meta, activeSection: id, loopOn: id !== null ? true : meta.loopOn };
-    set({ meta: next });
-    persistMeta(next);
-    applyLoop(next);
-    const sec = id ? next.sections?.find((x) => x.id === id) : undefined;
-    if (sec) trackPlayer.seek(sec.start);
+    get().setMeta({ sections: (meta.sections ?? []).filter((x) => x.id !== id) });
   },
   setLoopRange(a, b) {
     const meta = get().meta;
@@ -309,12 +344,46 @@ export const useStudio = create<StudioState>()((set, get) => ({
     const lo = Math.min(a, b);
     const hi = Math.max(a, b);
     if (lo === hi) return;
-    const next = { ...meta, activeLoop: lo, loopEnd: hi, loopOn: true, activeSection: null };
+    const next = { ...meta, activeLoop: lo, loopEnd: hi, loopOn: true, tempA: null, tempB: null };
     set({ meta: next });
     persistMeta(next);
     applyLoop(next);
-    const sorted = [...next.bookmarks].sort((x, y) => x.time - y.time);
+    const sorted = sortedMarkers(next);
     if (sorted[lo]) trackPlayer.seek(sorted[lo].time);
+  },
+  setLoopEnds(a, b) {
+    const meta = get().meta;
+    if (!meta) return;
+    const both = a !== null && b !== null && a < b;
+    const next = { ...meta, activeLoop: a, loopEnd: b, loopOn: both ? true : meta.loopOn, tempA: null, tempB: null };
+    set({ meta: next });
+    persistMeta(next);
+    applyLoop(next);
+  },
+  setLoopFromSection(start, end) {
+    const meta = get().meta;
+    if (!meta || end <= start) return;
+    const sorted = sortedMarkers(meta);
+    const near = (t: number) => sorted.findIndex((m) => Math.abs(m.time - t) < SAME_TIME_SEC);
+    const a = near(start);
+    const b = near(end);
+    const next = { ...meta, activeLoop: a >= 0 ? a : null, loopEnd: b >= 0 ? b : null, tempA: a >= 0 ? null : start, tempB: b >= 0 ? null : end, loopOn: true };
+    set({ meta: next });
+    persistMeta(next);
+    applyLoop(next);
+    trackPlayer.seek(start);
+  },
+  toggleLoop() {
+    const meta = get().meta;
+    if (!meta) return;
+    const [a, b] = loopTimes(meta, sortedMarkers(meta));
+    if (a === null || b === null || b <= a) return;
+    if (meta.loopOn) {
+      get().setLoopOn(false);
+      return;
+    }
+    get().setLoopOn(true);
+    trackPlayer.seek(a);
   },
   setLoopOn(on) {
     const meta = get().meta;
@@ -368,7 +437,8 @@ export const useStudio = create<StudioState>()((set, get) => ({
       w.terminate();
       const cur = get().meta;
       if (!cur || cur.trackId !== trackId) return;
-      const next = { ...cur, beatGrid: e.data, beatsPerBar: cur.beatsPerBar ?? 4 };
+      // A fresh detection brings its own meter; fall back to what the track had, then 4/4.
+      const next = { ...cur, beatGrid: e.data, beatsPerBar: e.data?.beatsPerBar ?? cur.beatsPerBar ?? 4 };
       set({ meta: next });
       persistMeta(next);
     };
@@ -382,6 +452,15 @@ export const useStudio = create<StudioState>()((set, get) => ({
   setDownbeat(t) {
     const meta = get().meta;
     if (!meta?.beatGrid) return;
+    const bpb = meta.beatsPerBar ?? meta.beatGrid.beatsPerBar ?? 4;
+    const idx = nearestBeatIndex(t, meta.beatGrid);
+    if (idx !== null) {
+      // Tracked beats: the bar phase is just which beat index is a downbeat.
+      const next = { ...meta, beatGrid: { ...meta.beatGrid, barStart: ((idx % bpb) + bpb) % bpb } };
+      set({ meta: next });
+      persistMeta(next);
+      return;
+    }
     const period = 60 / meta.beatGrid.bpm;
     const k = Math.round((t - meta.beatGrid.offset) / period);
     const bar = meta.beatsPerBar ?? 4;
@@ -411,6 +490,84 @@ trackPlayer.onWrap(() => {
   trackPlayer.setSpeed(next / 100);
   st.setMeta({ speed: next / 100 });
 });
+
+/**
+ * In the Android app: yt-dlp + ffmpeg run on the device (YtAudioPlugin), write an MP3 into the app
+ * cache, and the WebView reads it back through Capacitor's file URL. Progress events update busyText.
+ */
+async function loadYouTubeNative(
+  url: string,
+  set: (patch: Partial<StudioState>) => void,
+  get: () => StudioState,
+): Promise<void> {
+  set({ busy: true, error: null, busyText: 'Starting yt-dlp…' });
+  const sub = await YtAudio.addListener('progress', (ev) => {
+    if (ev.line && /^Updating/.test(ev.line)) {
+      set({ busyText: ev.line });
+      return;
+    }
+    const pct = Math.max(0, Math.min(100, Math.round(ev.percent)));
+    set({ busyText: pct > 0 ? `Downloading ${pct}%` : 'Downloading…' });
+  }).catch(() => null);
+  try {
+    const res = await YtAudio.download({ url: url.trim() });
+    set({ busyText: 'Decoding…' });
+    const r = await fetch(nativeFileUrl(res.path));
+    if (!r.ok) throw new Error(`could not read the downloaded file (${r.status})`);
+    const blob = await r.blob();
+    const type = res.ext === 'mp3' ? 'audio/mpeg' : res.ext === 'm4a' ? 'audio/mp4' : blob.type || 'audio/mpeg';
+    await get().loadFile(new File([blob], `${res.title}.${res.ext}`, { type }), youtubeSource(url));
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    set({ busy: false, busyText: null, error: msg === 'Cancelled' ? null : `YouTube: ${msg}` });
+  } finally {
+    void sub?.remove();
+  }
+}
+
+/** "youtube:<videoId>" for any YouTube URL shape, or undefined when no id is found. */
+export function youtubeSource(url: string): string | undefined {
+  const m = url.match(/(?:v=|youtu\.be\/|shorts\/|embed\/|live\/)([A-Za-z0-9_-]{6,})/);
+  return m ? `youtube:${m[1]}` : undefined;
+}
+
+/**
+ * One-time repair for records made before import de-duplication: fold every duplicate of a song
+ * (same source, or same name + size) into the copy with the most markers, union their markers and
+ * sections, point takes and "last track" at it, delete the rest. Idempotent; runs at startup.
+ */
+async function mergeDuplicateTracks(): Promise<void> {
+  const all = await storage.listTracks();
+  for (const group of duplicateGroups(all)) {
+    const metas = new Map<string, TrackMeta>();
+    for (const t of group) metas.set(t.id, migrateSections(await storage.getMeta(t.id)));
+    const primary = pickPrimary(group, (id) => metas.get(id));
+    const others = group.filter((t) => t.id !== primary.id);
+    await storage.putMeta(mergeMetas(metas.get(primary.id)!, others.map((t) => metas.get(t.id)!)));
+    await storage.remapTakes(
+      others.map((t) => t.id),
+      primary.id,
+    );
+    for (const t of others) await storage.deleteTrack(t.id);
+    const s = useSettings.getState();
+    if (others.some((t) => t.id === s.lastTrackId)) s.set({ lastTrackId: primary.id });
+    console.info(`merged ${others.length} duplicate(s) of "${primary.name}" into ${primary.id}`);
+  }
+}
+const storageReady: Promise<void> = mergeDuplicateTracks().catch((e) => console.warn('duplicate-track merge failed', e));
+
+/** A track's meta with 0.1.5-dev marker-bound sections converted to fixed times (saved back when that changed anything). */
+async function loadMeta(id: string): Promise<TrackMeta> {
+  const raw = await storage.getMeta(id);
+  const meta = migrateSections(raw);
+  if (meta !== raw) await storage.putMeta(meta);
+  return meta;
+}
+
+/** Not analysed yet, or analysed by the old fixed-grid detector (no beat times): run the tracker. */
+function needsBeatDetection(meta: TrackMeta): boolean {
+  return meta.beatGrid === undefined || (!!meta.beatGrid && !meta.beatGrid.beats);
+}
 
 /** True when served by the Vite dev server (which proxies /api to the helper). */
 function isDevServer(): boolean {

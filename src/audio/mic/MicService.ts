@@ -2,6 +2,7 @@ import { getAudioContext, loadWorklet, unlockAudio } from '../context';
 import type { PitchFrame } from '../pitch/tracker';
 import type { PitchWorkletParams } from '../pitch/pitch.worklet';
 import workletUrl from '../pitch/pitch.worklet.ts?worker&url';
+import { useSettings } from '../../state/settings';
 
 export type MicState = 'idle' | 'starting' | 'running' | 'paused' | 'error';
 type FrameListener = (f: PitchFrame) => void;
@@ -11,7 +12,8 @@ type StateListener = (s: MicState, error?: string) => void;
 /**
  * Single app-level microphone service.
  * - One getUserMedia session shared by every tab.
- * - Raw input: echo cancellation, noise suppression and auto gain OFF.
+ * - Raw input: noise suppression and auto gain OFF; echo cancellation OFF unless Settings →
+ *   Tuner → Echo cancel is on (then the OS subtracts the speaker output from the mic).
  * - A start that resolves after a stop is released (generation counter).
  * - Pitch analysis runs in an AudioWorklet; listeners get ~20 frames/s.
  */
@@ -35,6 +37,10 @@ class MicService {
   }
   get error(): string {
     return this._error;
+  }
+  /** What the OS actually applied to the live mic track (constraints are requests, not guarantees). */
+  get trackSettings(): MediaTrackSettings | null {
+    return this.stream?.getAudioTracks()[0]?.getSettings() ?? null;
   }
 
   onState(cb: StateListener): () => void {
@@ -83,7 +89,7 @@ class MicService {
       if (!fake) {
         stream = await navigator.mediaDevices.getUserMedia({
           audio: {
-            echoCancellation: false,
+            echoCancellation: useSettings.getState().echoCancel,
             noiseSuppression: false,
             autoGainControl: false,
             channelCount: 1,

@@ -8,15 +8,16 @@ Not a karaoke app: no songs, lyrics or scoring against tracks.
 
 - **Play**: exercise player with degree-labelled scales and vocal patterns, intro cue, auto-advance within a vocal range (turn around / stop at the edge, sing-to-find range), listen-then-sing mode, gap between runs, a run view with target blocks + sung trace + per-note hit colours, and an end-of-run score (hits, avg cents, precision, sustain, flat/sharp). Modelled on Singing Carrots, Erol Singer's Studio, Warm Vox.
 - **Tune**: tap-a-key target tuner with adjustable tolerance (default 20¢), cents + note + Hz readout, cents graph with note-labelled rows, hold-to-nail with steadiness, session bias (precise / flat / sharp, average, steadiness), key guess, and the same exercise mode as Play. Modelled on Vocal Pitch Monitor, Sing-inTuna, Cleartune, Singing Carrots.
-- **Studio**: Transpose-style marker timeline with A–B loops between any two markers, named coloured sections (Verse, Chorus…) that loop with one tap, YouTube import via a local yt-dlp helper, gapless looping with an optional gap, speed 25–200% and transpose ±12 st plus ±50¢ fine tune, speed trainer (ramp per loop pass), count-in before recording, takes with waveform, star (kept + drawn as a reference line under the live pitch while the track plays), WAV export, offline denoise. Modelled on Transpose, Anytune, Capo, GarageBand, Voloco.
+- **Studio**: Transpose-style marker timeline (pinch to zoom, drag to pan, bar / beat / half-beat ticks with bar numbers, double-tap a marker to jump to it) where markers split the track into segments: tap a segment to loop it, tap a later one to set the loop end, any later tap starts a new loop; name and colour a segment or a run of segments as a section (Verse, Chorus…) that loops with one tap and moves with its markers, YouTube import via a local yt-dlp helper, gapless looping with an optional gap, speed 25–200% and transpose ±12 st plus ±50¢ fine tune, speed trainer (ramp per loop pass), count-in before recording, takes with waveform, star (kept + drawn as a reference line under the live pitch while the track plays), WAV export, offline denoise. Modelled on Transpose, Anytune, Capo, GarageBand, Voloco.
 
 ## Stack
 
 - **Vite + React + TypeScript**, mobile-first dark UI, installable PWA (offline after first load).
 - **Web Audio API** for everything audio:
   - Pitch detection runs in an `AudioWorklet` (off the UI thread): McLeod Pitch Method, voiced/unvoiced hysteresis, median-of-3, 2048-sample window every 50 ms, 55–1200 Hz.
-  - One app-level mic service (`src/audio/mic/MicService.ts`) shared by all tabs; echo cancellation, noise suppression and auto-gain are **off**; a late mic start that resolves after a stop is released.
+  - One app-level mic service (`src/audio/mic/MicService.ts`) shared by all tabs; noise suppression and auto-gain are **off**, echo cancellation is off by default (Settings → Tuner → Echo cancel asks the OS to subtract the speaker from the mic; experimental, test the accuracy yourself); a late mic start that resolves after a stop is released.
   - Backing-track player worklet with SoundTouch: speed and transpose are independent; loop points are sample-accurate and gapless.
+  - Beat tracking (`src/audio/dsp/beats.ts`, runs in a worker): mel spectral flux → windowed tempo with a Viterbi path across windows (follows drift) → dynamic-programming beat placement (Ellis 2007) → downbeat/meter (3 or 4) from accent and bass patterns. Powers snapping, bar/beat ticks, "bar here" and the count-in tempo.
   - Takes are captured from the same mic session (no second `getUserMedia`), head-trimmed 50 ms, optional offline spectral-gating denoise, stored as WAV.
 - **IndexedDB** (`idb`) persists the actual track audio, per-track bookmarks / active loop / speed / transpose / position, and the last 5 takes. Settings and latency calibration persist in `localStorage`.
 - **Capacitor** config included for wrapping as an Android/iOS app.
@@ -33,15 +34,17 @@ npm run preview    # serve the production build
 
 The audio side (worklets) does not always hot-reload cleanly: reload the page after changing files under `src/audio/`.
 
-### YouTube helper (optional)
+### YouTube import
 
-"YouTube link" in Studio asks a small local helper to fetch the audio with yt-dlp + ffmpeg (both must be on PATH):
+**In the Android app** "YouTube link" runs yt-dlp on the device itself: the APK bundles yt-dlp, its QuickJS JavaScript runtime (YouTube needs one since late 2025) and ffmpeg through the [youtubedl-android](https://github.com/yausername/youtubedl-android) library, the same one YTDLnis uses. Nothing to set up. The native side is `android/app/src/main/java/app/singingpractice/YtAudioPlugin.java` (Capacitor plugin `YtAudio`), the web side `src/native/ytAudio.ts`. Settings → YouTube has an "Update yt-dlp" button for when YouTube changes something; it pulls the latest stable yt-dlp release. The library is GPL-3.0, so the app is too. Only `arm64-v8a` is packaged (see `abiFilters` in `android/app/build.gradle`).
+
+**In a browser** (dev server, PWA) there is no yt-dlp, so Studio asks a small helper on the PC instead (yt-dlp + ffmpeg must be on PATH):
 
 ```bash
 npm run server      # http://localhost:5174, GET /api/yt?url=…
 ```
 
-The dev server proxies `/api` to it. From a phone, set Settings → YouTube helper to the PC address (http://<pc-ip>:5174). Downloading YouTube audio may be against YouTube's terms; use it for your own practice.
+The dev server proxies `/api` to it. From a phone browser, set Settings → YouTube helper to the PC address (http://<pc-ip>:5174). Downloading YouTube audio may be against YouTube's terms; use it for your own practice.
 
 ### Android APK (Capacitor)
 
@@ -51,12 +54,13 @@ The `android/` project is committed (mic permission and LAN http already set). N
 npm run apk           # build web, sync into android/, gradle assembleDebug
 ```
 
-APK lands in `android/app/build/outputs/apk/debug/app-debug.apk`. Install with `adb install -r <apk>` or copy it to the phone. For YouTube import on the phone, set Settings → YouTube helper to `http://<pc-ip>:5174` while `npm run server` runs on the PC. iOS: `npx cap add ios` plus `NSMicrophoneUsageDescription` in Info.plist (needs Xcode).
+APK lands in `android/app/build/outputs/apk/debug/app-debug.apk`. Install with `adb install -r <apk>` or copy it to the phone. If the npm script cannot find `gradlew`, run `.\gradlew.bat assembleRelease` inside `android/` from PowerShell with `JAVA_HOME` and `ANDROID_HOME` set. iOS: `npx cap add ios` plus `NSMicrophoneUsageDescription` in Info.plist (needs Xcode).
 
 ### Dev helpers
 
 - `?fakemic=220` replaces the microphone with a voice-like oscillator (sawtooth + vibrato) so the whole pipeline can be exercised where mic capture is blocked. `window.__fakemic.setFreq(hz)` and `.setLevel(0..1)` change it live. `?fakemic=file:/dev/voice.mp3` loops an audio file from `public/dev/` into the pitch engine instead (real-voice testing).
 - In dev builds `window.__dev` exposes the studio store, both players and the settings store.
+- `?tab=play|tune|studio` opens that tab directly (used by the screenshot script).
 - `public/dev/test.wav` (git-ignored, regenerate with the snippet in git history or any audio file) is a 20 s stereo test track.
 
 ## Layout

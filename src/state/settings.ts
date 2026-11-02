@@ -47,6 +47,11 @@ export interface SettingsState {
   intro: IntroMode;
   holdSeconds: number;
   silenceDb: number;
+  /**
+   * Ask the OS for acoustic echo cancellation on the mic so the device stops hearing its own
+   * speaker (piano, backing track). Off = raw input, the accuracy baseline. Experimental.
+   */
+  echoCancel: boolean;
   /** Studio graph scroll speed in px per second. */
   graphSpeed: number;
   /** Manual latency offset in ms (added to measured). */
@@ -95,6 +100,7 @@ export const useSettings = create<SettingsState>()(
       intro: '15',
       holdSeconds: 1.5,
       silenceDb: -50,
+      echoCancel: false,
       graphSpeed: 60,
       latencyOffsetMs: 0,
       measuredLatencyMs: null,

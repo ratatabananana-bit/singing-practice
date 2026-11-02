@@ -13,8 +13,10 @@ export function MicTest() {
   const { state, error } = useMicState();
   const f = usePitchFrame();
   const silenceDb = useSettings((s) => s.silenceDb);
+  const echoWanted = useSettings((s) => s.echoCancel);
   const [perm, setPerm] = useState<string>('?');
   const [ctx, setCtx] = useState<{ state: string; rate: number } | null>(null);
+  const [track, setTrack] = useState<MediaTrackSettings | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -33,6 +35,7 @@ export function MicTest() {
     const t = setInterval(() => {
       const c = getAudioContext();
       setCtx({ state: c.state, rate: c.sampleRate });
+      setTrack(mic.trackSettings);
     }, 500);
     return () => {
       alive = false;
@@ -48,6 +51,13 @@ export function MicTest() {
     ['Audio', ctx ? `${ctx.state} · ${ctx.rate} Hz` : '—', ctx?.state !== 'running'],
     ['Level', `${Math.round(f.db)} dB${gated ? ` (below gate ${silenceDb} dB)` : ''}`, gated],
     ['Detected', f.voiced ? `${note} · ${f.freq.toFixed(1)} Hz · clarity ${f.clarity.toFixed(2)}` : `nothing · clarity ${f.clarity.toFixed(2)}`, false],
+    [
+      'Processing',
+      track
+        ? `echo cancel ${track.echoCancellation ? 'ON' : 'off'} (wanted ${echoWanted ? 'on' : 'off'}) · noise suppr. ${track.noiseSuppression ? 'ON' : 'off'} · auto gain ${track.autoGainControl ? 'ON' : 'off'}`
+        : 'no live mic track',
+      !!track && !!track.echoCancellation !== echoWanted,
+    ],
     ['Where', `${navigator.userAgent.includes('wv') ? 'Android app' : 'browser'} · ${innerWidth}×${innerHeight} css px · dpr ${devicePixelRatio}`, false],
   ];
   return (

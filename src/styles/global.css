@@ -1020,26 +1020,91 @@ span.pill.sm {
   opacity: 1;
   box-shadow: 0 0 0 2px #fff;
 }
+/* ---- timeline layout, DAW-ruler style (final word over the size tweaks above) ----
+   0–26 pins · 28–36 track bar (loop fill on it) · 36–58 ruler band: every tick hangs from the
+   track's bottom edge, so bar / beat / half-beat read by height alone, bar numbers sit beside
+   the bar ticks · 58–68 sections · playhead crosses track + ruler. */
 .timeline {
-  height: 52px;
+  height: 70px;
+  overflow: hidden;
 }
-.timeline-beats,
-.timeline-bars {
+.timeline-track,
+.timeline-loop {
+  top: 28px;
+}
+.timeline-head {
+  top: 22px;
+  height: 40px;
+}
+.timeline-section {
+  top: 58px;
+  height: 10px;
+  line-height: 10px;
+}
+.tl-bar,
+.tl-beat,
+.tl-sub {
   position: absolute;
-  left: 0;
-  right: 0;
+  top: 36px;
   pointer-events: none;
-  background-repeat: repeat-x;
+  transform: translateX(-50%);
 }
-.timeline-beats {
-  top: 24px;
-  height: 12px;
-  background-image: linear-gradient(90deg, rgba(255, 255, 255, 0.09) 0 1px, transparent 1px);
+/* downbeat: full ruler height, a touch thicker */
+.tl-bar {
+  width: 2px;
+  height: 22px;
+  background: rgba(255, 255, 255, 0.7);
 }
-.timeline-bars {
-  top: 20px;
-  height: 20px;
-  background-image: linear-gradient(90deg, rgba(255, 255, 255, 0.35) 0 1px, transparent 1px);
+/* beat: half height */
+.tl-beat {
+  width: 1px;
+  height: 11px;
+  background: rgba(255, 255, 255, 0.3);
+}
+/* half beat: quarter height */
+.tl-sub {
+  width: 1px;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.14);
+}
+.tl-barnum {
+  position: absolute;
+  left: 4px;
+  top: 10px;
+  font-family: var(--mono);
+  font-size: 9px;
+  line-height: 12px;
+  color: var(--muted);
+  pointer-events: none;
+  white-space: nowrap;
+}
+/* strip above the timeline: holds the "back to full view" icon at the top right, clear of the pins */
+.timeline-wrap {
+  position: relative;
+  margin-top: 4px;
+}
+.timeline-wrap .timeline {
+  margin-top: 0;
+}
+/* thin strip; the button hangs down from it into the (usually empty) right end of the pin band */
+.timeline-tools {
+  height: 8px;
+}
+.timeline-fit {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 2;
+  width: 36px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text);
+  border-radius: 6px;
+}
+.timeline-fit:disabled {
+  opacity: 0.3;
 }
 
 .btn.sm.primary {
@@ -1088,5 +1153,915 @@ span.pill.sm {
   }
   .piano .black .key-label {
     font-size: 9px;
+  }
+}
+
+/* ======================================================================
+   Studio track card — "Studio 3a" design (Claude Design, 2026-10-22).
+   Own tokens so the card matches the mock exactly; the rest of the app
+   keeps the global theme. Phone widths wrap the transport row.
+   ====================================================================== */
+.st-studio {
+  --s-bg: #121214;
+  --s-card: #18181b;
+  --s-btn: #222226;
+  --s-btn2: #2c2c30;
+  --s-text: #ecebe7;
+  --s-muted: #8e8c88;
+  --s-dim: #6a6865;
+  --s-yellow: #f2c14e;
+  --s-ink: #1a1608;
+  --s-line: rgba(255, 255, 255, 0.06);
+  --s-line2: rgba(255, 255, 255, 0.08);
+  display: flex;
+  flex-direction: column;
+  color: var(--s-text);
+  background: transparent;
+}
+.st-studio .mono {
+  font-family: var(--mono);
+}
+.st-muted {
+  color: var(--s-muted);
+}
+.st-dim {
+  color: var(--s-dim);
+}
+.st-nowrap {
+  white-space: nowrap;
+}
+.st-spacer {
+  flex: 1;
+}
+.st-eyebrow {
+  font: 500 10px var(--mono);
+  letter-spacing: 0.14em;
+  color: var(--s-dim);
+}
+.st-trackrow {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 4px 0 0;
+}
+.st-trackname {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.st-name {
+  font-size: 16px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.st-loadbtns {
+  display: flex;
+  gap: 8px;
+  flex: none;
+}
+.st-btn {
+  height: 40px;
+  padding: 0 14px;
+  border-radius: 10px;
+  background: #1d1d20;
+  border: 1px solid var(--s-line);
+  color: var(--s-text);
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.st-btn:disabled {
+  opacity: 0.5;
+}
+.st-btn.on,
+.st-btn.primary {
+  background: var(--s-yellow);
+  border-color: var(--s-yellow);
+  color: var(--s-ink);
+}
+.st-ytrow {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+.st-input {
+  flex: 1;
+  min-width: 0;
+  height: 40px;
+  padding: 0 12px;
+  border-radius: 10px;
+  border: 1px solid var(--s-line2);
+  background: var(--s-bg);
+  color: var(--s-text);
+  font-size: 14px;
+}
+.st-chip {
+  min-height: 32px;
+  padding: 0 10px;
+  border-radius: 8px;
+  background: var(--s-btn);
+  border: none;
+  color: var(--s-text);
+  font-size: 12px;
+  font-weight: 600;
+}
+.st-chip.on {
+  background: var(--s-yellow);
+  color: var(--s-ink);
+}
+
+/* transport */
+.st-transport {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 20px 0 0;
+  flex-wrap: wrap;
+}
+.st-play {
+  width: 56px;
+  height: 56px;
+  border-radius: 28px;
+  background: var(--s-yellow);
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  flex: none;
+}
+.st-play-tri {
+  width: 0;
+  height: 0;
+  border-left: 16px solid var(--s-ink);
+  border-top: 10px solid transparent;
+  border-bottom: 10px solid transparent;
+  margin-left: 5px;
+}
+.st-pause-bar {
+  width: 5px;
+  height: 18px;
+  background: var(--s-ink);
+  border-radius: 1px;
+}
+.st-time {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.st-time-big {
+  font-size: 30px;
+  font-weight: 500;
+  letter-spacing: -0.03em;
+  line-height: 1;
+}
+.st-time-of {
+  font-size: 12px;
+  color: var(--s-dim);
+}
+.st-stepper {
+  display: flex;
+  align-items: center;
+  height: 52px;
+  border-radius: 12px;
+  background: #1a1a1d;
+  border: 1px solid var(--s-line);
+  flex: none;
+}
+.st-stepper.on {
+  border-color: rgba(242, 193, 78, 0.5);
+}
+.st-stepper > button {
+  width: 44px;
+  height: 50px;
+  background: none;
+  border: none;
+  color: var(--s-muted);
+  font-size: 20px;
+}
+.st-stepper > button.st-stepper-val {
+  width: auto;
+  min-width: 56px;
+  padding: 0 4px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  line-height: 1.1;
+  gap: 3px;
+  color: var(--s-text);
+  font-size: 16px;
+  font-weight: 500;
+}
+.st-stepper-lbl {
+  font: 500 9px var(--mono);
+  letter-spacing: 0.14em;
+  color: var(--s-dim);
+}
+.st-expand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  font-size: 12px;
+}
+.st-expand.wrap {
+  flex-wrap: wrap;
+}
+.st-expand input[type="range"] {
+  flex: 1;
+}
+
+/* cards */
+.st-card {
+  margin-top: 16px;
+  background: var(--s-card);
+  border: 1px solid var(--s-line);
+  border-radius: 18px;
+}
+.st-loop {
+  margin-top: 20px;
+}
+.st-loop-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  row-gap: 10px;
+  column-gap: 10px;
+  padding: 18px 20px 0;
+  font-size: 12px;
+}
+.st-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 4px;
+}
+.st-loop-name {
+  font-size: 14px;
+  font-weight: 500;
+}
+.st-zoom {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+.st-zoom-val {
+  width: 44px;
+  text-align: center;
+  font-size: 11px;
+  color: var(--s-muted);
+}
+.st-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: var(--s-btn);
+  border: none;
+  color: var(--s-text);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 500;
+}
+.st-icon:disabled {
+  color: #5e5d5a;
+}
+.st-icon.st-reset {
+  width: auto;
+  padding: 0 10px;
+}
+.st-loop-body {
+  padding: 10px 24px 4px;
+}
+.st-loop-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--s-line);
+}
+.st-loop-foot .st-btn {
+  height: 44px;
+  border-radius: 12px;
+  background: var(--s-btn);
+  border: none;
+}
+.st-vr {
+  width: 1px;
+  height: 24px;
+  background: var(--s-line2);
+  margin: 0 4px;
+}
+.st-ab {
+  flex: none;
+  height: 44px;
+  padding: 0 12px 0 6px;
+  border-radius: 12px;
+  background: var(--s-btn);
+  border: none;
+  color: var(--s-text);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+.st-ab.on {
+  background: rgba(242, 193, 78, 0.16);
+  color: var(--s-yellow);
+}
+.st-ab-letter {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: var(--s-yellow);
+  color: var(--s-ink);
+  font-size: 13px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.st-loopbtn {
+  color: var(--s-dim);
+}
+.st-loopbtn.on {
+  background: var(--s-yellow);
+  color: var(--s-ink);
+}
+.st-loopbtn:disabled {
+  opacity: 0.5;
+}
+.st-srow-times {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.st-srow-times .st-srow-input {
+  width: 96px;
+  font-size: 14px;
+  font-weight: 400;
+}
+.st-snap.on {
+  background: rgba(242, 193, 78, 0.14) !important;
+  color: var(--s-yellow);
+}
+
+/* timeline */
+.st-tl-wrap {
+  margin: 0 -12px;
+}
+.st-tl {
+  position: relative;
+  height: 150px;
+  touch-action: none;
+  overflow: hidden;
+  padding: 0 12px;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.st-pin {
+  /* The button is only the 26 px circle; the stem is drawn below it and takes no taps, so a press on the bar never grabs a marker. */
+  position: absolute;
+  top: 4px;
+  width: 32px;
+  height: 28px;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: none;
+  border: none;
+  padding: 0;
+  touch-action: none;
+  cursor: grab;
+  z-index: 2;
+}
+.st-pin-c {
+  width: 26px;
+  height: 26px;
+  border-radius: 13px;
+  background: var(--s-text);
+  color: var(--s-bg);
+  font-size: 11px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 0 2px var(--s-card), 0 2px 6px rgba(0, 0, 0, 0.4);
+}
+.st-pin-stem {
+  position: absolute;
+  top: 26px;
+  left: 50%;
+  margin-left: -1px;
+  width: 2px;
+  height: 36px;
+  background: var(--s-text);
+  opacity: 0.7;
+  pointer-events: none;
+}
+.st-pin.picked .st-pin-c,
+.st-pin.picked .st-pin-stem {
+  background: var(--s-yellow);
+}
+.st-pin.temp {
+  pointer-events: none;
+}
+.st-pin.temp .st-pin-c,
+.st-pin.temp .st-pin-stem {
+  background: #8ec5ff;
+}
+.st-ab.temp {
+  background: rgba(142, 197, 255, 0.16);
+  color: #8ec5ff;
+}
+.st-ab.temp .st-ab-letter {
+  background: #8ec5ff;
+}
+.st-pin.pending .st-pin-c {
+  box-shadow: 0 0 0 2px var(--s-card), 0 0 0 5px rgba(242, 193, 78, 0.35);
+}
+.st-track,
+.st-played {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  top: 66px;
+  height: 3px;
+  border-radius: 2px;
+  background: #2c2c30;
+  pointer-events: none;
+}
+.st-played {
+  right: auto;
+  width: 0;
+  background: #5a5960;
+}
+.st-loopbar {
+  position: absolute;
+  top: 65px;
+  height: 5px;
+  border-radius: 3px;
+  background: var(--s-dim);
+  pointer-events: none;
+  z-index: 1;
+}
+.st-loopbar.on {
+  background: var(--s-yellow);
+}
+.st-ruler {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  top: 80px;
+  height: 24px;
+  pointer-events: none;
+}
+.master-tp {
+  width: 36px;
+  height: 30px;
+  color: var(--muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.master-tp.on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #1a1400;
+}
+.master-tp:disabled {
+  opacity: 0.45;
+}
+.st-tick {
+  position: absolute;
+  top: 0;
+  width: 1px;
+  background: #45443f;
+  height: 4px;
+}
+.st-tick.beat {
+  height: 3px;
+  background: #34332f;
+}
+.st-tick.major {
+  height: 7px;
+  background: var(--s-dim);
+}
+.st-tick.major span {
+  position: absolute;
+  top: 10px;
+  left: 0;
+  transform: translateX(-50%);
+  font: 400 10px var(--mono);
+  color: #7a7874;
+}
+.st-secrow {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  top: 112px;
+  height: 38px;
+}
+.st-secband {
+  position: absolute;
+  top: 0;
+  height: 38px;
+  padding: 0 2px 0 0;
+  background: none;
+  border: none;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  touch-action: none;
+}
+.st-secband-bar {
+  display: block;
+  height: 6px;
+  border-radius: 3px;
+}
+.st-secband-name {
+  margin-top: 6px;
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.st-head {
+  position: absolute;
+  top: 48px;
+  height: 58px;
+  width: 2px;
+  margin-left: -1px;
+  background: #fff;
+  border-radius: 1px;
+  pointer-events: none;
+  z-index: 3;
+}
+.st-head-dot {
+  position: absolute;
+  top: 13px;
+  left: -5px;
+  width: 12px;
+  height: 12px;
+  border-radius: 6px;
+  background: #fff;
+  box-shadow: 0 0 0 3px var(--s-card);
+}
+.st-ov {
+  position: relative;
+  height: 20px;
+  margin: 2px 0 0;
+  touch-action: none;
+  cursor: grab;
+}
+.st-ov-track {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 8px;
+  height: 4px;
+  border-radius: 2px;
+  background: #2c2c30;
+}
+.st-ov-win {
+  position: absolute;
+  top: 3px;
+  height: 14px;
+  min-width: 8px;
+  border-radius: 7px;
+  background: rgba(236, 235, 231, 0.28);
+}
+.st-ov-head {
+  position: absolute;
+  top: 3px;
+  height: 14px;
+  width: 2px;
+  background: #fff;
+}
+
+/* list card */
+.st-list {
+  overflow: hidden;
+}
+.st-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 6px;
+  border-bottom: 1px solid var(--s-line);
+}
+.st-tabs button {
+  flex: 1;
+  height: 44px;
+  border-radius: 12px;
+  border: none;
+  background: transparent;
+  color: var(--s-muted);
+  font-size: 14px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.st-tabs button.on {
+  background: var(--s-btn2);
+  color: var(--s-text);
+}
+.st-count {
+  font-size: 12px;
+  color: var(--s-muted);
+}
+.st-list-body {
+  height: 364px;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+.st-list-body::-webkit-scrollbar {
+  display: none;
+}
+.st-newsec {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 52px;
+  padding: 0 16px;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--s-line);
+  color: var(--s-text);
+  font-size: 14px;
+  font-weight: 500;
+  text-align: left;
+}
+.st-newsec > span:first-child + * {
+}
+.st-newsec-label {
+  white-space: nowrap;
+}
+.st-newsec:disabled {
+  color: #5e5d5a;
+}
+.st-newsec-ico {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  border: 1px dashed currentColor;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+.st-srow {
+  display: grid;
+  grid-template-columns: 4px minmax(0, 1fr) auto 60px auto;
+  gap: 12px;
+  align-items: center;
+  min-height: 52px;
+  padding: 0 8px 0 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  cursor: pointer;
+}
+.st-srow-bar {
+  height: 24px;
+  border-radius: 2px;
+}
+.st-srow-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.st-srow-title {
+  font-size: 15px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.st-srow-input {
+  width: 100%;
+  height: 36px;
+  padding: 0 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(236, 235, 231, 0.3);
+  background: var(--s-bg);
+  color: var(--s-text);
+  font-size: 15px;
+  font-weight: 500;
+  outline: none;
+}
+.st-now {
+  font: 600 9px var(--mono);
+  letter-spacing: 0.08em;
+  color: var(--s-bg);
+  background: var(--s-text);
+  padding: 2px 5px;
+  border-radius: 4px;
+}
+.st-srow-range {
+  font-size: 12px;
+}
+.st-srow-bars {
+  font-size: 11px;
+  text-align: right;
+}
+.st-srow-acts {
+  display: flex;
+  gap: 2px;
+}
+.st-srow-acts .st-icon {
+  background: none;
+  color: var(--s-muted);
+}
+.st-srow-acts .st-icon.lit {
+  color: var(--s-text);
+}
+.st-mrow {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) auto auto auto;
+  gap: 12px;
+  align-items: center;
+  min-height: 52px;
+  padding: 0 8px 0 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+.st-mrow.ab {
+  background: rgba(242, 193, 78, 0.07);
+}
+.st-mrow.cur {
+  background: rgba(236, 235, 231, 0.05);
+}
+.st-num {
+  width: 24px;
+  height: 24px;
+  border-radius: 12px;
+  background: var(--s-text);
+  color: var(--s-bg);
+  font-size: 11px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.st-mrow-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  background: none;
+  border: none;
+  color: var(--s-text);
+  text-align: left;
+  padding: 0;
+}
+.st-mrow-time {
+  font-size: 14px;
+}
+.st-mrow-sub {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--s-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.st-mrow-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 3px;
+  flex: none;
+}
+.st-abbtn {
+  height: 40px;
+  width: 48px;
+  border-radius: 10px;
+  background: var(--s-btn);
+  border: none;
+  color: var(--s-text);
+  font-size: 14px;
+  font-weight: 700;
+}
+.st-abbtn:disabled {
+  opacity: 0.4;
+}
+.st-abbtn.on {
+  background: var(--s-yellow);
+  color: var(--s-ink);
+}
+.st-del {
+  background: none;
+  color: var(--s-muted);
+  font-size: 18px;
+}
+
+/* footer */
+.st-foot {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px 12px 20px;
+  border-radius: 16px;
+  font-size: 13px;
+  color: var(--s-muted);
+  flex-wrap: wrap;
+}
+.st-foot-gap {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: auto;
+}
+.st-foot-val {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--s-text);
+  font-size: 13px;
+}
+.st-seg {
+  display: flex;
+  padding: 3px;
+  border-radius: 12px;
+  background: var(--s-btn);
+  gap: 2px;
+}
+.st-seg button {
+  height: 36px;
+  width: 44px;
+  border-radius: 9px;
+  border: none;
+  background: transparent;
+  color: var(--s-muted);
+  font-size: 12px;
+  font-weight: 500;
+  padding: 0;
+}
+.st-seg button.on {
+  background: #3a3a3f;
+  color: var(--s-text);
+}
+
+/* phone: the transport wraps, steppers share the second line */
+@media (max-width: 599px) {
+  .st-transport .st-spacer {
+    flex-basis: 100%;
+    height: 0;
+  }
+  .st-stepper {
+    flex: 1;
+  }
+  .st-stepper > button.st-stepper-val {
+    flex: 1;
+  }
+  .st-loadbtns {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+  .st-srow {
+    grid-template-columns: 4px minmax(0, 1fr) auto auto;
+  }
+  .st-srow-bars {
+    display: none;
+  }
+  /* line 1: + Marker … Snap beat · line 2: A and B side by side */
+  .st-loop-foot {
+    flex-wrap: wrap;
+  }
+  .st-loop-foot .st-vr,
+  .st-loop-foot .st-spacer {
+    display: none;
+  }
+  .st-loop-foot .st-snap {
+    margin-left: auto;
+    order: 1;
+  }
+  .st-loop-foot .st-ab {
+    order: 2;
+    flex: 1 1 40%;
+    justify-content: flex-start;
+  }
+  .st-newsec .mono {
+    font-size: 11px;
+  }
+}
+
+/* Tablet: the Studio 3a card is drawn for 768 px at 1:1 — undo the global 1.2 zoom for it. */
+@media (min-width: 600px) {
+  .st-studio {
+    zoom: 0.8333;
   }
 }
