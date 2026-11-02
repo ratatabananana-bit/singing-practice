@@ -14,8 +14,8 @@ android {
         applicationId "app.singingpractice"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 6
-        versionName "0.1.5"
+        versionCode 7
+        versionName "0.1.6"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         // youtubedl-android ships native binaries (python, ffmpeg, quickjs) per ABI; 64-bit ARM only
         // keeps the APK small. Every tablet/phone from the last ~8 years is arm64.

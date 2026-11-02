@@ -9,7 +9,7 @@ const config: CapacitorConfig = {
   // allowMixedContent: the (browser-only) YouTube helper is plain http on the LAN.
   // webContentsDebuggingEnabled: lets chrome://inspect / CDP over adb read the app's IndexedDB and
   // console for on-device debugging (personal app; turn off before any public release).
-  android: { allowMixedContent: true, webContentsDebuggingEnabled: true },
+  android: { allowMixedContent: true, webContentsDebuggingEnabled: false },
 };
 
 export default config;
